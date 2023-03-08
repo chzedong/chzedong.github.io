@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+  <style>
+    #container {
+      border: 1px solid #333;
+      border-radius: 3px;
+      min-height: 100px;
+      padding: 10px;
+    }
+    #copy {
+      margin-top: 4px;
+      margin-right: 4px;
+      float: left;
+    }
+    #input {
+      margin-top: 4px;
+      min-width: 200px;
+      min-height: 60px;
+    }
+  </style>
+</head>
+
+<body>
+  <header>预览</header>
+  <div id="container"></div>
+  <button id="copy">复制</button>
+  <textarea id="input" placeholder="粘贴内容"></textarea>
+  <script>
+
+    const copyText = function (text) {
+      if (navigator.clipboard) {
+        // clipboard api 复制
+        navigator.clipboard.writeText(text);
+      } else {
+        var textarea = document.createElement('textarea');
+        document.body.appendChild(textarea);
+        // 隐藏此输入框
+        textarea.style.position = 'fixed';
+        textarea.style.clip = 'rect(0 0 0 0)';
+        textarea.style.top = '10px';
+        // 赋值
+        textarea.value = text;
+        // 选中
+        textarea.select();
+        // 复制
+        document.execCommand('copy', true);
+        // 移除输入框
+        document.body.removeChild(textarea);
+      }
+    }
+
+    let tamp = ''
+    const container = document.querySelector('#container');
+    const input = document.querySelector('#input')
+    input.onpaste = function (event) {
+      const html = event.clipboardData.getData('text/html') || '';
+      const text = event.clipboardData.getData('text/plain') || '';
+      container.innerHTML = html || text
+      tamp = html || text
+    }
+
+    const copy = document.querySelector('#copy')
+    copy.onclick = function() {
+      copyText(tamp)
+    }
+
+  </script>
+</body>
+
+</html>
