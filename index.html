@@ -18,6 +18,11 @@
       margin-right: 4px;
       float: left;
     }
+    #copy-text {
+      margin-top: 4px;
+      margin-right: 4px;
+      float: left;
+    }
     #input {
       margin-top: 4px;
       min-width: 200px;
@@ -73,8 +78,8 @@
       copyText(tamp)
     }
     
-    const copy = document.querySelector('#copy-text')
-    copy.onclick = function() {
+    const copyTextHandler = document.querySelector('#copy-text')
+    copyTextHandler.onclick = function() {
       copyText(tampText)
     }
 
