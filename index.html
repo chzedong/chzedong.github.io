@@ -29,7 +29,8 @@
 <body>
   <header>预览</header>
   <div id="container"></div>
-  <button id="copy">复制</button>
+  <button id="copy">复制HTML</button>
+  <button id="copy-text">复制纯文本</button>
   <textarea id="input" placeholder="粘贴内容"></textarea>
   <script>
 
@@ -56,18 +57,25 @@
     }
 
     let tamp = ''
+    let tampText = ''
     const container = document.querySelector('#container');
     const input = document.querySelector('#input')
     input.onpaste = function (event) {
       const html = event.clipboardData.getData('text/html') || '';
       const text = event.clipboardData.getData('text/plain') || '';
       container.innerHTML = html || text
-      tamp = html || text
+      tamp = html || text;
+      tampText = text;
     }
 
     const copy = document.querySelector('#copy')
     copy.onclick = function() {
       copyText(tamp)
+    }
+    
+    const copy = document.querySelector('#copy-text')
+    copy.onclick = function() {
+      copyText(tampText)
     }
 
   </script>
