@@ -37,6 +37,8 @@
   <button id="copy">复制HTML</button>
   <button id="copy-text">复制纯文本</button>
   <textarea id="input" placeholder="粘贴内容"></textarea>
+  
+  <textarea id="input2" placeholder="粘贴内容测试 navigator.clipboard.readText"></textarea>
   <script>
 
     const copyText = function (text) {
@@ -81,6 +83,15 @@
     const copyTextHandler = document.querySelector('#copy-text')
     copyTextHandler.onclick = function() {
       copyText(tampText)
+    }
+    
+    const input2 = document.querySelector('#input2')
+    input2.onpaste = async function (event) {
+
+      const text = await navigator.clipboard.readText();
+      container.innerHTML = text
+      tamp = text;
+      tampText = text;
     }
 
   </script>
