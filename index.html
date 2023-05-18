@@ -36,6 +36,7 @@
   <div id="container"></div>
   <button id="copy">复制HTML</button>
   <button id="copy-text">复制纯文本</button>
+  <button id="copy-doc">复制文档</button>
   <textarea id="input" placeholder="粘贴内容"></textarea>
   
   <textarea id="input2" placeholder="粘贴内容测试 navigator.clipboard.readText"></textarea>
@@ -65,14 +66,17 @@
 
     let tamp = ''
     let tampText = ''
+    let tampDoc = ''
     const container = document.querySelector('#container');
     const input = document.querySelector('#input')
     input.onpaste = function (event) {
       const html = event.clipboardData.getData('text/html') || '';
       const text = event.clipboardData.getData('text/plain') || '';
+      const doc = event.clipboardData.getData('text/x-ones-editor-doc') || '';
       container.innerHTML = html || text
       tamp = html || text;
       tampText = text;
+      tampDoc = doc;
     }
 
     const copy = document.querySelector('#copy')
@@ -85,6 +89,12 @@
       copyText(tampText)
     }
     
+    const copyTextHandler2 = document.querySelector('#copy-doc')
+    copyTextHandler2.onclick = function() {
+      copyText(tampDoc)
+    }
+    
+    
     const input2 = document.querySelector('#input2')
     input2.onpaste = async function (event) {
 
@@ -93,7 +103,6 @@
       tamp = text;
       tampText = text;
     }
-
   </script>
 </body>
 
