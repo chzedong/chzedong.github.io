@@ -6,4 +6,4 @@
 
 感谢您访问我的个人博客主页，希望您能在这里找到有用的资源和灵感。如果您有任何问题或建议，请随时与我联系。谢谢！
 
-博客地址： [https://chzedong.github.io/]https://chzedong.github.io/
+博客地址： https://chzedong.github.io/
