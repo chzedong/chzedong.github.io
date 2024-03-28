@@ -109,7 +109,7 @@
 
     const copy = document.querySelector('#copy')
     copy.onclick = function() {
-      alert(navigator.userAgent.toLowerCase())
+      input.value = navigator.userAgent.toLowerCase()
     }
     
     const copyTextHandler = document.querySelector('#copy-text')
