@@ -28,29 +28,30 @@
       min-width: 200px;
       min-height: 60px;
     }
+    textarea {
+      width: 50%;
+    }
   </style>
 </head>
 
 <body>
-  <header>预览</header>
-  <div id="container"></div>
-<!--   <button id="copy">复制HTML</button>
-  <button id="copy-text">复制纯文本</button>
-  <button id="copy-doc">复制文档</button>
   <textarea id="input" placeholder="粘贴内容"></textarea>
+  <div>-------------------------------------------------------------------------</div>
+  <button id="copy">复制HTML</button>
+  <button id="copy-text">复制纯文本</button>
+  <!-- <button id="copy-doc">复制文档</button> -->
   
-  <textarea id="input2" placeholder="粘贴内容测试 navigator.clipboard.readText"></textarea>
+  <!-- <textarea id="input2" placeholder="粘贴内容测试 navigator.clipboard.readText"></textarea>
   <form action="/api" method="post">
     <input id="editor-input" name="editor-input" />  
     <input type="submit" value='提交' />
-  </form>
+  </form> -->
 
-  <div>-------------------------------------------------------------------------</div>
-  <div>Clipboard API test</div>
+  <!-- <div>Clipboard API test</div>
   <input id="paster">
   <button id="read-clipboard">Read Clipboard</button> -->
   
-<!--   <script>
+  <!-- <script>
     const input = document.querySelector('#paster');
     const readClipboard = document.querySelector('#read-clipboard');
     readClipboard.onclick = async function () {
@@ -64,74 +65,72 @@
       }
     };
   </script> -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script crossorigin src="https:unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https:unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="./index.js"></script>
 
   <script>
-    const container = document.querySelector('#container');
-    container.innerText = navigator.userAgent.toLowerCase()
-    // const copyText = function (text) {
-    //   if (navigator.clipboard) {
-    //     // clipboard api 复制
-    //     navigator.clipboard.writeText(text);
-    //   } else {
-    //     var textarea = document.createElement('textarea');
-    //     document.body.appendChild(textarea);
-    //     // 隐藏此输入框
-    //     textarea.style.position = 'fixed';
-    //     textarea.style.clip = 'rect(0 0 0 0)';
-    //     textarea.style.top = '10px';
-    //     // 赋值
-    //     textarea.value = text;
-    //     // 选中
-    //     textarea.select();
-    //     // 复制
-    //     document.execCommand('copy', true);
-    //     // 移除输入框
-    //     document.body.removeChild(textarea);
-    //   }
-    // }
+     const copyText = function (text) {
+       if (navigator.clipboard) {
+          // clipboard api 复制
+         navigator.clipboard.writeText(text);
+       } else {
+         var textarea = document.createElement('textarea');
+         document.body.appendChild(textarea);
+          隐藏此输入框
+         textarea.style.position = 'fixed';
+         textarea.style.clip = 'rect(0 0 0 0)';
+         textarea.style.top = '10px';
+          赋值
+         textarea.value = text;
+          选中
+         textarea.select();
+          复制
+         document.execCommand('copy', true);
+          移除输入框
+         document.body.removeChild(textarea);
+       }
+     }
 
-    // let tamp = ''
-    // let tampText = ''
-    // let tampDoc = ''
-    // const container = document.querySelector('#container');
-    // const input = document.querySelector('#input')
-    // input.onpaste = function (event) {
-    //   const html = event.clipboardData.getData('text/html') || '';
-    //   const text = event.clipboardData.getData('text/plain') || '';
-    //   const doc = event.clipboardData.getData('text/x-ones-editor-doc') || '';
-    //   container.innerHTML = html || text
-    //   tamp = html || text;
-    //   tampText = text;
-    //   tampDoc = doc;
-    // }
+     let tamp = ''
+     let tampText = ''
+     let tampDoc = ''
+     const container = document.querySelector('#container');
+     const input = document.querySelector('#input')
+     input.onpaste = function (event) {
+       const html = event.clipboardData.getData('text/html') || '';
+       const text = event.clipboardData.getData('text/plain') || '';
+       const doc = event.clipboardData.getData('text/x-ones-editor-doc') || '';
+      //  container.innerHTML = html || text
+       tamp = html || text;
+       tampText = text;
+       tampDoc = doc;
+     }
 
-    // const copy = document.querySelector('#copy')
-    // copy.onclick = function() {
-    //   input.value = navigator.userAgent.toLowerCase()
-    // }
+     const copy = document.querySelector('#copy')
+     copy.onclick = function() {
+      copyText(tamp)
+     }
     
-    // const copyTextHandler = document.querySelector('#copy-text')
-    // copyTextHandler.onclick = function() {
-    //   copyText(tampText)
-    // }
+     const copyTextHandler = document.querySelector('#copy-text')
+     copyTextHandler.onclick = function() {
+       copyText(tampText)
+     }
     
-    // const copyTextHandler2 = document.querySelector('#copy-doc')
-    // copyTextHandler2.onclick = function() {
-    //   copyText(tampDoc)
-    // }
+    //  const copyTextHandler2 = document.querySelector('#copy-doc')
+    //  copyTextHandler2.onclick = function() {
+    //    copyText(tampDoc)
+    //  }
     
     
-    // const input2 = document.querySelector('#input2')
-    // input2.onpaste = async function (event) {
+    //  const input2 = document.querySelector('#input2')
+    //  input2.onpaste = async function (event) {
 
-    //   const text = await navigator.clipboard.readText();
-    //   container.innerHTML = text
-    //   tamp = text;
-    //   tampText = text;
-    // }
+    //    const text = await navigator.clipboard.readText();
+    //    container.innerHTML = text
+    //    tamp = text;
+    //    tampText = text;
+    //  }
   </script>
 </body>
 
