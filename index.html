@@ -1,136 +1,524 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Document</title>
+  <title>ZeDong's Portal | 个人门户</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
   <style>
-    #container {
-      border: 1px solid #333;
-      border-radius: 3px;
-      min-height: 100px;
-      padding: 10px;
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
     }
-    #copy {
-      margin-top: 4px;
-      margin-right: 4px;
-      float: left;
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      color: #333;
     }
-    #copy-text {
-      margin-top: 4px;
-      margin-right: 4px;
-      float: left;
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
     }
+
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+      color: white;
+    }
+
+    .header h1 {
+      font-size: 3rem;
+      margin-bottom: 10px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+
+    .header p {
+      font-size: 1.2rem;
+      opacity: 0.9;
+    }
+
+    .tools-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+      gap: 30px;
+      margin-bottom: 40px;
+    }
+
+    .tool-card {
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 15px;
+      padding: 30px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      backdrop-filter: blur(10px);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .tool-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+    }
+
+    .tool-card h3 {
+      color: #667eea;
+      margin-bottom: 20px;
+      font-size: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .tool-card i {
+      font-size: 1.3rem;
+    }
+
+    .clipboard-tool {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
     #input {
-      margin-top: 4px;
-      min-width: 200px;
-      min-height: 60px;
+      width: 100%;
+      min-height: 120px;
+      padding: 15px;
+      border: 2px solid #e0e0e0;
+      border-radius: 10px;
+      font-size: 14px;
+      resize: vertical;
+      transition: border-color 0.3s ease;
+      font-family: inherit;
     }
-    textarea {
-      width: 50%;
+
+    #input:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .button-group {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+      color: white;
+    }
+
+    .btn-primary {
+      background: linear-gradient(45deg, #667eea, #764ba2);
+    }
+
+    .btn-secondary {
+      background: linear-gradient(45deg, #f093fb, #f5576c);
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    }
+
+    .links-section {
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 15px;
+      padding: 30px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      backdrop-filter: blur(10px);
+    }
+
+    .links-section h3 {
+      color: #667eea;
+      margin-bottom: 20px;
+      font-size: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .links-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+    }
+
+    .link-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 15px;
+      background: rgba(102, 126, 234, 0.1);
+      border-radius: 10px;
+      text-decoration: none;
+      color: #333;
+      transition: all 0.3s ease;
+    }
+
+    .link-item:hover {
+      background: rgba(102, 126, 234, 0.2);
+      transform: translateX(5px);
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 40px;
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 14px;
+    }
+
+    .status-message {
+      padding: 10px;
+      border-radius: 8px;
+      margin-top: 10px;
+      font-size: 14px;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .status-message.show {
+      opacity: 1;
+    }
+
+    .status-success {
+      background: rgba(76, 175, 80, 0.1);
+      color: #4caf50;
+      border: 1px solid rgba(76, 175, 80, 0.3);
+    }
+
+    .status-error {
+      background: rgba(244, 67, 54, 0.1);
+      color: #f44336;
+      border: 1px solid rgba(244, 67, 54, 0.3);
+    }
+
+    @media (max-width: 768px) {
+      .header h1 {
+        font-size: 2rem;
+      }
+      
+      .tools-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .button-group {
+        flex-direction: column;
+      }
+      
+      .btn {
+        justify-content: center;
+      }
     }
   </style>
 </head>
 
 <body>
-  <textarea id="input" placeholder="粘贴内容"></textarea>
-  <div>-------------------------------------------------------------------------</div>
-  <button id="copy">复制HTML</button>
-  <button id="copy-text">复制纯文本</button>
-  <!-- <button id="copy-doc">复制文档</button> -->
-  
-  <!-- <textarea id="input2" placeholder="粘贴内容测试 navigator.clipboard.readText"></textarea>
-  <form action="/api" method="post">
-    <input id="editor-input" name="editor-input" />  
-    <input type="submit" value='提交' />
-  </form> -->
+  <div class="container">
+    <!-- 头部区域 -->
+    <header class="header">
+      <h1><i class="fas fa-code"></i> ZeDong's Portal</h1>
+      <p>欢迎来到我的个人门户网站 | Welcome to my personal portal</p>
+    </header>
 
-  <!-- <div>Clipboard API test</div>
-  <input id="paster">
-  <button id="read-clipboard">Read Clipboard</button> -->
-  
-  <!-- <script>
-    const input = document.querySelector('#paster');
-    const readClipboard = document.querySelector('#read-clipboard');
-    readClipboard.onclick = async function () {
-      try {
-        const ret = await navigator.clipboard.readText(); 
-        console.log(ret)
-        input.value = ret
-      } catch (er) {
-        console.log(er)
-        alert(er.message)
-      }
-    };
-  </script> -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-  <script src="./index.js"></script>
+    <!-- 工具区域 -->
+    <div class="tools-grid">
+      <!-- 复制粘贴工具 -->
+      <div class="tool-card">
+        <h3><i class="fas fa-clipboard"></i> 智能复制粘贴工具</h3>
+        <div class="clipboard-tool">
+          <textarea id="input" placeholder="在此粘贴内容，支持HTML和纯文本格式..."></textarea>
+          <div class="button-group">
+            <button id="copy" class="btn btn-primary">
+              <i class="fas fa-code"></i> 复制HTML
+            </button>
+            <button id="copy-text" class="btn btn-secondary">
+              <i class="fas fa-font"></i> 复制纯文本
+            </button>
+          </div>
+          <div id="status-message" class="status-message"></div>
+        </div>
+      </div>
+
+      <!-- 开发文档工具 -->
+       <div class="tool-card">
+         <h3><i class="fas fa-book"></i> 开发文档</h3>
+         <p style="margin-bottom: 20px; color: #666;">前端开发必备文档和教程</p>
+         <div class="button-group">
+           <a href="https://git-scm.com/docs" target="_blank" class="btn btn-primary">
+             <i class="fab fa-git-alt"></i> Git 文档
+           </a>
+           <a href="https://zh-hans.reactjs.org/" target="_blank" class="btn btn-secondary">
+             <i class="fab fa-react"></i> React 文档
+           </a>
+           <a href="https://cn.vuejs.org/v2/api/" target="_blank" class="btn btn-primary">
+             <i class="fab fa-vuejs"></i> Vue.js
+           </a>
+           <a href="https://www.typescriptlang.org/" target="_blank" class="btn btn-secondary">
+             <i class="fas fa-code"></i> TypeScript
+           </a>
+           <a href="https://cn.vite.dev/guide/" target="_blank" class="btn btn-primary">
+             <i class="fas fa-bolt"></i> Vite 文档
+           </a>
+           <a href="https://ant.design/components/overview-cn/" target="_blank" class="btn btn-secondary">
+             <i class="fas fa-palette"></i> Ant Design
+           </a>
+         </div>
+       </div>
+
+       <!-- 在线工具 -->
+       <div class="tool-card">
+         <h3><i class="fas fa-tools"></i> 在线工具</h3>
+         <p style="margin-bottom: 20px; color: #666;">提升开发效率的在线工具</p>
+         <div class="button-group">
+           <a href="https://babeljs.io/repl/" target="_blank" class="btn btn-primary">
+             <i class="fas fa-exchange-alt"></i> Babel Repl
+           </a>
+           <a href="https://astexplorer.net/" target="_blank" class="btn btn-secondary">
+             <i class="fas fa-sitemap"></i> AST Explorer
+           </a>
+           <a href="https://carbon.now.sh/" target="_blank" class="btn btn-primary">
+             <i class="fas fa-camera"></i> Carbon
+           </a>
+           <a href="https://regexr.com/" target="_blank" class="btn btn-secondary">
+             <i class="fas fa-search"></i> RegExr
+           </a>
+           <a href="https://transform.tools/html-to-jsx" target="_blank" class="btn btn-primary">
+             <i class="fas fa-code"></i> HTML to JSX
+           </a>
+           <a href="https://tinypng.com/" target="_blank" class="btn btn-secondary">
+             <i class="fas fa-compress"></i> TinyPNG
+           </a>
+         </div>
+       </div>
+
+       <!-- 开发环境 -->
+       <div class="tool-card">
+         <h3><i class="fas fa-laptop-code"></i> 开发环境</h3>
+         <p style="margin-bottom: 20px; color: #666;">在线编程和开发环境</p>
+         <div class="button-group">
+           <a href="https://codepen.io/" target="_blank" class="btn btn-primary">
+             <i class="fab fa-codepen"></i> CodePen
+           </a>
+           <a href="https://stackblitz.com/" target="_blank" class="btn btn-secondary">
+             <i class="fas fa-bolt"></i> StackBlitz
+           </a>
+           <a href="https://gitpod.io/workspaces" target="_blank" class="btn btn-primary">
+             <i class="fab fa-git-alt"></i> Gitpod
+           </a>
+           <a href="https://code.visualstudio.com/docs" target="_blank" class="btn btn-secondary">
+             <i class="fas fa-code"></i> VS Code 文档
+           </a>
+           <a href="https://excalidraw.com/" target="_blank" class="btn btn-primary">
+             <i class="fas fa-draw-polygon"></i> Excalidraw
+           </a>
+         </div>
+       </div>
+
+       <!-- AI 助手 -->
+       <div class="tool-card">
+         <h3><i class="fas fa-robot"></i> AI 开发助手</h3>
+         <p style="margin-bottom: 20px; color: #666;">AI 驱动的开发工具</p>
+         <div class="button-group">
+           <a href="https://chat.openai.com/chat" target="_blank" class="btn btn-primary">
+             <i class="fas fa-comments"></i> ChatGPT
+           </a>
+           <a href="https://chat.vercel.ai/" target="_blank" class="btn btn-secondary">
+             <i class="fas fa-robot"></i> Vercel AI Chat
+           </a>
+           <a href="https://regexgpt.app/" target="_blank" class="btn btn-primary">
+             <i class="fas fa-magic"></i> RegExGPT
+           </a>
+         </div>
+       </div>
+    </div>
+
+    <!-- 链接区域 -->
+     <div class="links-section">
+       <h3><i class="fas fa-link"></i> 快速链接</h3>
+       <div class="links-grid">
+         <a href="https://github.com/chzedong" target="_blank" class="link-item">
+           <i class="fab fa-github"></i>
+           <span>我的GitHub</span>
+         </a>
+         <a href="https://codepen.io/chenzedong5" target="_blank" class="link-item">
+           <i class="fab fa-codepen"></i>
+           <span>我的CodePen</span>
+         </a>
+         <a href="https://developers.weixin.qq.com/miniprogram/dev/framework/" target="_blank" class="link-item">
+           <i class="fab fa-weixin"></i>
+           <span>微信开发文档</span>
+         </a>
+         <a href="https://www.expressjs.com.cn/4x/api.html" target="_blank" class="link-item">
+           <i class="fas fa-server"></i>
+           <span>Express API</span>
+         </a>
+         <a href="http://api.nodejs.cn/" target="_blank" class="link-item">
+           <i class="fab fa-node-js"></i>
+           <span>Node.js API</span>
+         </a>
+         <a href="https://docs.npmjs.com/cli/v9" target="_blank" class="link-item">
+           <i class="fas fa-box"></i>
+           <span>NPM 文档</span>
+         </a>
+         <a href="https://www.jenkins.io/zh/" target="_blank" class="link-item">
+           <i class="fas fa-cogs"></i>
+           <span>Jenkins</span>
+         </a>
+         <a href="https://chrome.google.com/webstore/category/extensions?hl=zh-CN" target="_blank" class="link-item">
+           <i class="fab fa-chrome"></i>
+           <span>Chrome 扩展</span>
+         </a>
+         <a href="https://source.unsplash.com/" target="_blank" class="link-item">
+           <i class="fas fa-images"></i>
+           <span>图片素材</span>
+         </a>
+         <a href="https://www.rapidtables.com/convert/color/hex-to-rgb.html" target="_blank" class="link-item">
+           <i class="fas fa-palette"></i>
+           <span>颜色转换</span>
+         </a>
+         <a href="https://autoprefixer.github.io/" target="_blank" class="link-item">
+           <i class="fas fa-magic"></i>
+           <span>CSS Autoprefixer</span>
+         </a>
+         <a href="https://www.srihash.org/" target="_blank" class="link-item">
+           <i class="fas fa-shield-alt"></i>
+           <span>SRI Hash 生成</span>
+         </a>
+       </div>
+     </div>
+
+    <!-- 页脚 -->
+    <footer class="footer">
+      <p>&copy; 2025 ZeDong's Portal. Made with <i class="fas fa-heart" style="color: #e74c3c;"></i> and passion for coding.</p>
+    </footer>
+  </div>
 
   <script>
-     const copyText = function (text) {
-       if (navigator.clipboard) {
-          // clipboard api 复制
-         navigator.clipboard.writeText(text);
-       } else {
-         var textarea = document.createElement('textarea');
-         document.body.appendChild(textarea);
-          隐藏此输入框
-         textarea.style.position = 'fixed';
-         textarea.style.clip = 'rect(0 0 0 0)';
-         textarea.style.top = '10px';
-          赋值
-         textarea.value = text;
-          选中
-         textarea.select();
-          复制
-         document.execCommand('copy', true);
-          移除输入框
-         document.body.removeChild(textarea);
-       }
-     }
+    // 状态提示功能
+    const showStatus = function(message, isSuccess = true) {
+      const statusEl = document.querySelector('#status-message');
+      statusEl.textContent = message;
+      statusEl.className = `status-message ${isSuccess ? 'status-success' : 'status-error'} show`;
+      
+      setTimeout(() => {
+        statusEl.classList.remove('show');
+      }, 3000);
+    }
 
-     let tamp = ''
-     let tampText = ''
-     let tampDoc = ''
-     const container = document.querySelector('#container');
-     const input = document.querySelector('#input')
-     input.onpaste = function (event) {
-       const html = event.clipboardData.getData('text/html') || '';
-       const text = event.clipboardData.getData('text/plain') || '';
-       const doc = event.clipboardData.getData('text/x-ones-editor-doc') || '';
-      //  container.innerHTML = html || text
-       tamp = html || text;
-       tampText = text;
-       tampDoc = doc;
-     }
+    // 增强的复制功能
+    const copyText = async function (text, type = 'HTML') {
+      if (!text.trim()) {
+        showStatus('没有内容可复制！', false);
+        return;
+      }
 
-     const copy = document.querySelector('#copy')
-     copy.onclick = function() {
-      copyText(tamp)
-     }
-    
-     const copyTextHandler = document.querySelector('#copy-text')
-     copyTextHandler.onclick = function() {
-       copyText(tampText)
-     }
-    
-    //  const copyTextHandler2 = document.querySelector('#copy-doc')
-    //  copyTextHandler2.onclick = function() {
-    //    copyText(tampDoc)
-    //  }
-    
-    
-    //  const input2 = document.querySelector('#input2')
-    //  input2.onpaste = async function (event) {
+      try {
+        if (navigator.clipboard) {
+          // 使用现代 Clipboard API
+          await navigator.clipboard.writeText(text);
+          showStatus(`${type}内容已成功复制到剪贴板！`, true);
+        } else {
+          // 降级方案
+          const textarea = document.createElement('textarea');
+          document.body.appendChild(textarea);
+          textarea.style.position = 'fixed';
+          textarea.style.clip = 'rect(0 0 0 0)';
+          textarea.style.top = '10px';
+          textarea.value = text;
+          textarea.select();
+          const successful = document.execCommand('copy');
+          document.body.removeChild(textarea);
+          
+          if (successful) {
+            showStatus(`${type}内容已成功复制到剪贴板！`, true);
+          } else {
+            showStatus('复制失败，请手动复制内容。', false);
+          }
+        }
+      } catch (err) {
+        console.error('复制失败:', err);
+        showStatus('复制失败，请检查浏览器权限。', false);
+      }
+    }
 
-    //    const text = await navigator.clipboard.readText();
-    //    container.innerHTML = text
-    //    tamp = text;
-    //    tampText = text;
-    //  }
+    // 存储粘贴的内容
+    let htmlContent = '';
+    let textContent = '';
+    let docContent = '';
+
+    // 获取DOM元素
+    const input = document.querySelector('#input');
+    const copyBtn = document.querySelector('#copy');
+    const copyTextBtn = document.querySelector('#copy-text');
+
+    // 粘贴事件处理
+    input.addEventListener('paste', function (event) {
+      const clipboardData = event.clipboardData || window.clipboardData;
+      
+      htmlContent = clipboardData.getData('text/html') || '';
+      textContent = clipboardData.getData('text/plain') || '';
+      docContent = clipboardData.getData('text/x-ones-editor-doc') || '';
+      
+      // 如果有HTML内容，优先使用HTML，否则使用纯文本
+      const finalContent = htmlContent || textContent;
+      
+      if (finalContent) {
+        showStatus('内容已粘贴，可以进行复制操作！', true);
+      }
+    });
+
+    // 输入框内容变化时更新存储的内容
+    // input.addEventListener('input', function() {
+    //   textContent = this.value;
+    //   htmlContent = this.value; // 如果是手动输入，HTML和文本内容相同
+    // });
+
+    // 复制HTML按钮事件
+    copyBtn.addEventListener('click', function() {
+      const content = htmlContent || textContent || input.value;
+      copyText(content, 'HTML');
+    });
+
+    // 复制纯文本按钮事件
+    copyTextBtn.addEventListener('click', function() {
+      const content = textContent || input.value;
+      copyText(content, '纯文本');
+    });
+
+    // 页面加载完成提示
+    document.addEventListener('DOMContentLoaded', function() {
+      showStatus('欢迎使用智能复制粘贴工具！', true);
+    });
+
+    // 添加键盘快捷键支持
+    document.addEventListener('keydown', function(event) {
+      // Ctrl+Shift+C 复制HTML
+      if (event.ctrlKey && event.shiftKey && event.key === 'C') {
+        event.preventDefault();
+        copyBtn.click();
+      }
+      // Ctrl+Shift+V 复制纯文本
+      if (event.ctrlKey && event.shiftKey && event.key === 'V') {
+        event.preventDefault();
+        copyTextBtn.click();
+      }
+    });
   </script>
 </body>
 
