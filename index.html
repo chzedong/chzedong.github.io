@@ -346,6 +346,25 @@
            </a>
          </div>
        </div>
+
+       <!-- 编码/解码工具 -->
+       <div class="tool-card">
+         <h3><i class="fas fa-lock"></i> 编码/解码工具</h3>
+         <div class="codec-tool">
+           <div class="button-group" style="margin-bottom: 10px">
+             <input id="codec-cdn" type="text" placeholder="CDN地址 (默认：jsDelivr +esm)" style="flex:1; padding: 10px; border: 2px solid #e0e0e0; border-radius: 8px;" />
+             <button id="codec-load" class="btn btn-primary"><i class="fas fa-cloud-download-alt"></i> 加载库</button>
+           </div>
+           <textarea id="codec-input" placeholder="输入要编码/解码的内容..." style="min-height: 120px"></textarea>
+           <div class="button-group">
+             <button id="codec-encode" class="btn btn-primary"><i class="fas fa-key"></i> 编码</button>
+             <button id="codec-decode" class="btn btn-secondary"><i class="fas fa-unlock"></i> 解码</button>
+             <button id="codec-copy" class="btn btn-primary"><i class="fas fa-copy"></i> 复制结果</button>
+           </div>
+           <textarea id="codec-output" placeholder="结果输出..." readonly style="min-height: 120px"></textarea>
+           <div id="codec-status" class="status-message"></div>
+         </div>
+       </div>
     </div>
 
     <!-- 链接区域 -->
@@ -518,6 +537,114 @@
         event.preventDefault();
         copyTextBtn.click();
       }
+    });
+  </script>
+
+
+  <script type="module">
+    const statusEl = document.querySelector('#codec-status');
+    const showCodecStatus = (message, isSuccess = true) => {
+      if (!statusEl) return;
+      statusEl.textContent = message;
+      statusEl.className = `status-message ${isSuccess ? 'status-success' : 'status-error'} show`;
+      setTimeout(() => statusEl.classList.remove('show'), 3000);
+    };
+
+    const cdnInput = document.querySelector('#codec-cdn');
+    const loadBtn = document.querySelector('#codec-load');
+    const inputEl = document.querySelector('#codec-input');
+    const outputEl = document.querySelector('#codec-output');
+    const encodeBtn = document.querySelector('#codec-encode');
+    const decodeBtn = document.querySelector('#codec-decode');
+    const copyBtn2 = document.querySelector('#codec-copy');
+
+    const DEFAULT_CDN = 'https://cdn.jsdelivr.net/npm/arkit-encoder-decoder/+esm';
+    if (cdnInput) cdnInput.value = DEFAULT_CDN;
+
+    let codecModule = null;
+
+    async function loadCodec() {
+      const url = (cdnInput?.value?.trim()) || DEFAULT_CDN;
+      try {
+        codecModule = await import(url);
+        showCodecStatus('编码库已加载成功！', true);
+      } catch (e) {
+        console.error('编码库加载失败', e);
+        codecModule = null;
+        showCodecStatus('编码库加载失败，请检查CDN地址。', false);
+      }
+    }
+
+    loadBtn?.addEventListener('click', loadCodec);
+
+    function getEncodeDecode() {
+      if (!codecModule) return [null, null];
+      const encode = codecModule.encode || codecModule.default?.encode || codecModule.Encoder?.encode || null;
+      const decode = codecModule.decode || codecModule.default?.decode || codecModule.Decoder?.decode || null;
+      return [encode, decode];
+    }
+
+    encodeBtn?.addEventListener('click', async () => {
+      const [encode] = getEncodeDecode();
+      if (!encode) {
+        showCodecStatus('未检测到 encode 方法，请确认库导出。', false);
+        return;
+      }
+      try {
+        const result = await encode(inputEl?.value || '');
+        outputEl.value = typeof result === 'string' ? result : JSON.stringify(result);
+        showCodecStatus('编码成功！', true);
+      } catch (e) {
+        console.error(e);
+        showCodecStatus('编码失败：' + (e?.message || e), false);
+      }
+    });
+
+    decodeBtn?.addEventListener('click', async () => {
+      const [, decode] = getEncodeDecode();
+      if (!decode) {
+        showCodecStatus('未检测到 decode 方法，请确认库导出。', false);
+        return;
+      }
+      try {
+        const result = await decode(inputEl?.value || '');
+        outputEl.value = typeof result === 'string' ? result : JSON.stringify(result);
+        showCodecStatus('解码成功！', true);
+      } catch (e) {
+        console.error(e);
+        showCodecStatus('解码失败：' + (e?.message || e), false);
+      }
+    });
+
+    copyBtn2?.addEventListener('click', () => {
+      const content = outputEl?.value || '';
+      if (!content.trim()) {
+        showCodecStatus('没有内容可复制！', false);
+        return;
+      }
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(content)
+          .then(() => showCodecStatus('结果已复制到剪贴板！', true))
+          .catch((err) => {
+            console.error(err);
+            showCodecStatus('复制失败，请检查浏览器权限。', false);
+          });
+      } else {
+        const textarea = document.createElement('textarea');
+        document.body.appendChild(textarea);
+        textarea.style.position = 'fixed';
+        textarea.style.clip = 'rect(0 0 0 0)';
+        textarea.style.top = '10px';
+        textarea.value = content;
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        showCodecStatus('结果已复制到剪贴板！', true);
+      }
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+      showCodecStatus('可选：先点击“加载库”再进行编码/解码。', true);
     });
   </script>
 </body>
