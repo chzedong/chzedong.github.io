@@ -368,15 +368,9 @@
         margin-bottom: 14px;
       }
 
+      .section-title--toggle,
       .tools-wrap {
-        max-height: 0;
-        opacity: 0;
-        margin-bottom: 0;
-      }
-
-      .tools-grid {
-        grid-template-columns: 1fr;
-        gap: 14px;
+        display: none;
       }
 
       .nav-grid {
@@ -562,22 +556,12 @@
       var toggle = document.getElementById('tools-toggle');
       var wrap = document.getElementById('tools-wrap');
       var icon = document.getElementById('toggle-icon');
-      var isMobile = window.innerWidth <= 768;
+      if (window.innerWidth <= 768) return; // 移动端不展示工具
 
-      // 移动端初始收起（不加 animated，避免 transition 闪烁）
-      if (isMobile) {
-        wrap.classList.add('collapsed');
-        icon.classList.add('flipped');
-      } else {
-        // 桌面端默认展开，启用动画
-        wrap.classList.add('animated');
-      }
+      // 桌面端默认展开，启用动画
+      wrap.classList.add('animated');
 
       toggle.addEventListener('click', function () {
-        // 首次交互启用动画
-        if (!wrap.classList.contains('animated')) {
-          wrap.classList.add('animated');
-        }
         wrap.classList.toggle('collapsed');
         icon.classList.toggle('flipped');
       });
