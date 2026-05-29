@@ -329,6 +329,7 @@
       border-radius: var(--radius);
       margin-bottom: 20px;
       overflow: hidden;
+      max-width: 100%;
     }
 
     .code-ref__header {
@@ -455,6 +456,8 @@
       border: 1px solid var(--color-border-light);
       font-size: 13px;
       line-height: 1.6;
+      max-width: 100%;
+      box-sizing: border-box;
     }
 
     pre code {
@@ -712,6 +715,8 @@
       white-space: pre;
       overflow-x: auto;
       border: 1px solid var(--color-border-light);
+      max-width: 100%;
+      box-sizing: border-box;
     }
 
     .dir-tree .comment {
@@ -834,10 +839,15 @@
       pre {
         font-size: 12px;
         padding: 16px 18px;
+        white-space: pre-wrap;
+        word-break: break-word;
       }
 
       table {
         font-size: 12px;
+        display: block;
+        overflow-x: auto;
+        max-width: 100%;
       }
 
       th, td {
@@ -857,6 +867,8 @@
       .dir-tree {
         font-size: 11px;
         padding: 12px 14px;
+        white-space: pre-wrap;
+        word-break: break-word;
       }
 
       .module-grid {
