@@ -78,10 +78,13 @@
     /* ---- Tools Grid ---- */
     .tools-wrap {
       overflow: hidden;
-      transition: max-height 0.4s ease, opacity 0.3s ease, margin-bottom 0.3s ease;
       max-height: 900px;
       opacity: 1;
       margin-bottom: 40px;
+    }
+
+    .tools-wrap.animated {
+      transition: max-height 0.4s ease, opacity 0.3s ease, margin-bottom 0.3s ease;
     }
 
     .tools-wrap.collapsed {
@@ -365,6 +368,12 @@
         margin-bottom: 14px;
       }
 
+      .tools-wrap {
+        max-height: 0;
+        opacity: 0;
+        margin-bottom: 0;
+      }
+
       .tools-grid {
         grid-template-columns: 1fr;
         gap: 14px;
@@ -555,24 +564,22 @@
       var icon = document.getElementById('toggle-icon');
       var isMobile = window.innerWidth <= 768;
 
-      function collapse() {
+      // 移动端初始收起（不加 animated，避免 transition 闪烁）
+      if (isMobile) {
         wrap.classList.add('collapsed');
         icon.classList.add('flipped');
+      } else {
+        // 桌面端默认展开，启用动画
+        wrap.classList.add('animated');
       }
-      function expand() {
-        wrap.classList.remove('collapsed');
-        icon.classList.remove('flipped');
-      }
-
-      // 移动端默认收起
-      if (isMobile) collapse();
 
       toggle.addEventListener('click', function () {
-        if (wrap.classList.contains('collapsed')) {
-          expand();
-        } else {
-          collapse();
+        // 首次交互启用动画
+        if (!wrap.classList.contains('animated')) {
+          wrap.classList.add('animated');
         }
+        wrap.classList.toggle('collapsed');
+        icon.classList.toggle('flipped');
       });
     })();
   </script>
