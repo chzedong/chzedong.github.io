@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>解构 Immer — Proxy draft → 不可变数据</title>
+<style>
+:root{--color-bg:#fff;--color-bg-secondary:#f8f9fa;--color-bg-tertiary:#f1f3f5;--color-text:#1a1a2e;--color-text-secondary:#495057;--color-text-muted:#868e96;--color-border:#dee2e6;--color-border-light:#e9ecef;--color-primary:#2563eb;--color-primary-light:#eff6ff;--color-accent:#7c3aed;--color-accent-light:#f5f3ff;--color-success:#059669;--color-success-bg:#ecfdf5;--color-warning:#d97706;--color-warning-bg:#fffbeb;--color-danger:#dc2626;--color-danger-bg:#fef2f2;--color-info:#0891b2;--color-info-bg:#ecfeff;--color-code-bg:#f1f5f9;--color-code-text:#1e293b;--color-inline-code-bg:#f1f5f9;--color-inline-code-text:#e11d48;--sidebar-width:260px;--font-sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--font-mono:"SF Mono","Fira Code","Consolas",monospace;--radius:8px}
+@media(prefers-color-scheme:dark){:root{--color-bg:#0f172a;--color-bg-secondary:#1e293b;--color-bg-tertiary:#334155;--color-text:#e2e8f0;--color-text-secondary:#94a3b8;--color-text-muted:#64748b;--color-border:#334155;--color-border-light:#1e293b;--color-primary:#3b82f6;--color-primary-light:#1e3a5f;--color-accent:#8b5cf6;--color-accent-light:#2e1065;--color-success-bg:#064e3b;--color-warning-bg:#451a03;--color-danger-bg:#450a0a;--color-info-bg:#083344;--color-code-bg:#1e293b;--color-code-text:#e2e8f0;--color-inline-code-bg:#334155;--color-inline-code-text:#f87171}}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:20px}
+body{font-family:var(--font-sans);font-size:15px;line-height:1.7;color:var(--color-text);background:var(--color-bg)}
+.layout{display:flex;min-height:100vh}
+.sidebar{position:fixed;top:0;left:0;width:var(--sidebar-width);height:100vh;background:var(--color-bg-secondary);border-right:1px solid var(--color-border);overflow-y:auto;padding:24px 20px;z-index:100}
+.sidebar-header{font-size:13px;font-weight:600;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--color-border)}
+.sidebar-title{font-size:16px;font-weight:700;color:var(--color-text);margin-bottom:20px}
+.sidebar-nav{list-style:none}.sidebar-nav li{margin-bottom:2px}
+.sidebar-nav a{display:block;padding:6px 12px;border-radius:6px;color:var(--color-text-secondary);text-decoration:none;font-size:14px;transition:all 150ms}
+.sidebar-nav a:hover{background:var(--color-bg-tertiary);color:var(--color-text)}
+.main{margin-left:var(--sidebar-width);flex:1;max-width:860px;padding:48px 56px 80px}
+.page-header{margin-bottom:40px;padding-bottom:32px;border-bottom:1px solid var(--color-border)}
+.page-header h1{font-size:32px;font-weight:800;margin-bottom:12px}
+.page-header .subtitle{font-size:17px;color:var(--color-text-secondary)}
+.badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:500;background:var(--color-bg-tertiary);color:var(--color-text-secondary)}
+section{margin-bottom:48px}
+section h2{font-size:24px;font-weight:700;margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid var(--color-border-light)}
+section h3{font-size:19px;font-weight:600;margin-top:28px;margin-bottom:12px}
+section p,section li{color:var(--color-text-secondary);margin-bottom:10px}
+section ul,section ol{padding-left:24px;margin-bottom:14px}
+pre{font-family:var(--font-mono);font-size:13px;line-height:1.5;background:var(--color-code-bg);color:var(--color-code-text);padding:16px 20px;border-radius:var(--radius);overflow-x:auto;margin:16px 0}
+code{font-family:var(--font-mono);font-size:13px}
+:not(pre)>code{background:var(--color-inline-code-bg);color:var(--color-inline-code-text);padding:2px 6px;border-radius:3px}
+.callout{padding:16px 20px;border-radius:var(--radius);border-left:4px solid;margin:20px 0}
+.callout-title{font-weight:600;margin-bottom:4px}
+.callout-info{background:var(--color-info-bg);border-color:var(--color-info)}
+.callout-tip{background:var(--color-success-bg);border-color:var(--color-success)}
+.callout-warning{background:var(--color-warning-bg);border-color:var(--color-warning)}
+.callout-insight{background:var(--color-accent-light);border-color:var(--color-accent)}
+table{width:100%;border-collapse:collapse;margin:16px 0}
+th,td{border:1px solid var(--color-border);padding:10px 14px;text-align:left;font-size:14px}
+th{background:var(--color-bg-secondary);font-weight:600;color:var(--color-text)}
+td{color:var(--color-text-secondary)}
+.code-ref{border:1px solid var(--color-border);border-radius:var(--radius);overflow:hidden;margin:16px 0}
+.code-ref__header{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:var(--color-bg-secondary);border-bottom:1px solid var(--color-border)}
+.code-ref__path{font-family:var(--font-mono);font-size:12px;color:var(--color-text-muted)}
+.code-ref__notes{padding:10px 16px;background:var(--color-info-bg);font-size:13px;color:var(--color-text-secondary)}
+.mermaid{margin:20px 0;padding:20px;background:var(--color-bg-secondary);border-radius:var(--radius);border:1px solid var(--color-border-light);overflow-x:auto;text-align:center}
+.mermaid-caption{text-align:center;font-size:13px;color:var(--color-text-muted);margin-top:-16px;margin-bottom:20px}
+.mermaid svg{max-width:100%;height:auto}
+.flow-steps{counter-reset:step;list-style:none;padding:0}
+.flow-steps li{counter-increment:step;position:relative;padding-left:40px;margin-bottom:16px;padding-bottom:16px;border-left:2px solid var(--color-border)}
+.flow-steps li:last-child{border-left-color:transparent}
+.flow-steps li::before{content:counter(step);position:absolute;left:-14px;top:0;width:26px;height:26px;border-radius:50%;background:var(--color-primary);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+@media(max-width:1024px){.sidebar{transform:translateX(-100%)}.main{margin-left:0;padding:32px 24px}}
+@media(max-width:640px){.page-header h1{font-size:24px}section h2{font-size:20px}}
+@media print{.sidebar{display:none}.main{margin-left:0;padding:0;max-width:100%}}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'default'});</script>
+</head>
+<body><div class="layout">
+<aside class="sidebar"><div class="sidebar-header">开源库解构</div><div class="sidebar-title"><a href="#">Immer</a></div>
+<ul class="sidebar-nav">
+<li><a href="#s0">快速上手</a></li><li><a href="#s1">1. 项目背景</a></li><li><a href="#s2">2. 工程化方案</a></li><li><a href="#s3">3. 项目结构</a></li><li><a href="#s4">4. 核心链路</a></li><li><a href="#s5">5. 架构设计</a></li><li><a href="#s6">6. 同类库对比</a></li><li><a href="#s7">7. 学习要点</a></li>
+</ul></aside>
+<main class="main">
+<header class="page-header">
+<h1>解构 Immer — Proxy draft → 不可变</h1>
+<p class="subtitle">Create the next immutable state by mutating the current one · v10</p>
+<div class="badges"><span class="badge">28,945 ★</span><span class="badge">MIT</span><span class="badge">Michel Weststrate</span></div>
+<p style="margin-top:16px"><a href="https://github.com/immerjs/immer" style="color:var(--color-primary)">github.com/immerjs/immer</a></p>
+</header>
+
+<section id="s0"><h2>快速上手</h2>
+<h3>最小示例</h3>
+<pre><code>import { produce } from 'immer'
+
+const baseState = [
+  { title: 'Learn Immer', done: true },
+  { title: 'Use Immer', done: false },
+]
+
+const nextState = produce(baseState, draft => {
+  draft[1].done = true       // 直接修改 proxy
+  draft.push({ title: 'Tweet about it', done: false })
+})
+
+// baseState 不变！nextState 是新对象</code></pre>
+<h3>Redux reducer 场景</h3>
+<pre><code>// ❌ 传统写法
+const reducer = (state, action) => {
+  switch (action.type) {
+    case 'ADD_TODO':
+      return { ...state, todos: [...state.todos, action.payload] }
+  }
+}
+
+// ✅ Immer 写法 — 直接"修改"
+const reducer = produce((draft, action) => {
+  switch (action.type) {
+    case 'ADD_TODO':
+      draft.todos.push(action.payload)
+  }
+})</code></pre>
+</section>
+
+<section id="s1"><h2>1. 项目背景</h2>
+<h3>解决了什么问题</h3>
+<p>JavaScript 的不可变更新是出了名的啰嗦。深层嵌套对象的展开会让你怀疑人生。</p>
+<p>Immer 的思路：<strong>让你用可变语法写不可变逻辑</strong>。给原始对象包一层 Proxy，在 Proxy 上直接用 <code>draft.name = 'new'</code> 修改，Immer 在背后创建浅拷贝链，最终返回一个新对象，原始对象毫发无伤。</p>
+
+<div class="callout callout-insight"><div class="callout-title">🧠 如果让你来实现</div>
+<p><strong>问题</strong>：用 Proxy 实现"可变语法 → 不可变结果"，怎么追踪哪些字段被改过？</p>
+<p><strong>直觉方案</strong>：Proxy 的 set trap 里每次修改同步写回一个新对象，一层一层浅拷贝。</p>
+<p><strong>Immer 的做法</strong>：写时不立即拷贝——只在第一次修改时调用 <code>prepareCopy()</code> 做浅拷贝。之后所有修改打在 <code>copy_</code> 上，<code>base_</code> 保持不动。最终 <code>finalize()</code> 时只拷贝修改过的层级，没改的分支直接复用 <code>base_</code> 的引用。</p>
+<p><strong>差异分析</strong>：直觉方案每个 set 都做一次浅拷贝，但写一个深层字段时要为整条路径上的每个父节点都做浅拷贝——产生大量中间对象。Immer 把拷贝和修改分离成两个阶段（draft 阶段→finalize 阶段），批量处理，避免了中间拷贝。</p>
+</div>
+</section>
+
+<section id="s2"><h2>2. 工程化方案</h2>
+<table>
+<tr><th>维度</th><th>方案</th></tr>
+<tr><td>语言</td><td>TypeScript 5 + Flow</td></tr>
+<tr><td>构建</td><td>tsup（基于 esbuild）</td></tr>
+<tr><td>测试</td><td>Vitest + 性能测试套件</td></tr>
+<tr><td>发布</td><td>semantic-release 自动化</td></tr>
+<tr><td>产物</td><td>CJS + ESM + legacy ESM + React Native</td></tr>
+<tr><td>包大小</td><td>~4KB gzipped（produce-only）</td></tr>
+</table>
+</section>
+
+<section id="s3"><h2>3. 项目结构</h2>
+<pre><code>src/
+├── immer.ts             ← 主入口，导出 produce/createDraft
+├── internal.ts          ← 桶文件，聚合所有模块的导出
+├── core/
+│   ├── immerClass.ts    ← Immer 类（produce 主循环、curried 柯里化）
+│   ├── proxy.ts         ← ★ Proxy 创建 + draft 状态管理 + 陷阱函数
+│   ├── finalize.ts      ← ★ 结果处理、finalize 递归、跨引用更新
+│   ├── scope.ts         ← Scope 管理（一次 produce 调用的上下文）
+│   └── current.ts       ← original/current/isDraft 工具函数
+├── plugins/
+│   ├── patches.ts       ← JSON Patch 生成（记录变更路径）
+│   ├── mapset.ts        ← Map/Set 的 Proxy 支持
+│   └── arrayMethods.ts  ← 数组方法拦截（push/pop/splice 等）
+├── utils/               ← 工具函数（浅拷贝、冻结、环境检测）
+└── types/               ← TypeScript 类型定义</code></pre>
+<p>核心模块只有两个：<code>proxy.ts</code>（创建 draft + 拦截操作）和 <code>finalize.ts</code>（处理结果 + 递归终局化）。</p>
+</section>
+
+<section id="s4"><h2>4. 核心链路</h2>
+<h3>推荐阅读顺序</h3>
+<ol class="flow-steps">
+<li><strong>src/immer.ts</strong> — API 入口，理解 produce/curry 的调用方式</li>
+<li><strong>src/core/immerClass.ts</strong> — produce 主循环：柯里化 → scope → proxy → recipe → 结果</li>
+<li><strong>src/core/proxy.ts</strong> — Draft 状态结构 + Proxy 陷阱</li>
+<li><strong>src/core/finalize.ts</strong> — 终局化：把 copy_ 树变成最终结果</li>
+<li><strong>src/core/scope.ts</strong> — 一次 produce 调用的生命周期</li>
+</ol>
+
+<h3>完整生命周期</h3>
+<pre class="mermaid">
+flowchart TD
+    A["produce(base, recipe)"] --> B{"IsDraftable?"}
+    B -->|Yes| C["enterScope() 创建 Scope"]
+    C --> D["createProxy(scope, base)"]
+    D --> E["recipe(proxy) — 用户在 proxy 上修改"]
+    E --> F["Proxy traps 拦截写操作<br/>prepareCopy + markChanged"]
+    F --> G["processResult(result, scope)"]
+    G --> H["finalize(scope, value)<br/>递归收集 copy_ 链"]
+    H --> I["maybeFreeze<br/>生产环境自动冻结"]
+    I --> J["revokeScope<br/>销毁 Proxy"]
+    J --> K["返回新对象"]
+    B -->|No| L["直接返回 base"]
+</pre>
+<p class="mermaid-caption">图：produce 的完整生命周期</p>
+
+<h3>草稿状态结构</h3>
+<div class="code-ref"><div class="code-ref__header"><span class="code-ref__path">src/core/proxy.ts — ProxyObjectState</span></div>
+<pre><code>interface ProxyObjectState {
+  type_: ArchType.Object
+  base_: any            // ★ 原始对象（不变）
+  copy_: any            // ★ 浅拷贝（所有修改打在这里）
+  draft_: Drafted       // ★ Proxy 实例（给用户操作的）
+  modified_: boolean    // 是否修改过
+  finalized_: boolean   // 是否已终局化
+  assigned_: Map        // 记录了哪些属性被修改/删除
+  parent_: ImmerState   // 父 draft（用于递归标记 modified_）
+  scope_: ImmerScope    // 所属 scope
+}</code></pre>
+<div class="code-ref__notes">💡 <strong>设计意图</strong>：<code>base_</code> 和 <code>copy_</code> 分离是关键。修改打 <code>copy_</code> 上，未修改的字段直接读 <code>base_</code>。finalize 时如果 <code>modified_ == false</code>，直接返回 <code>base_</code>（零拷贝）。</div>
+</div>
+
+<h3>Proxy 陷阱：get — 惰性拷贝</h3>
+<div class="code-ref"><div class="code-ref__header"><span class="code-ref__path">src/core/proxy.ts — get trap（精简）</span></div>
+<pre><code>get(state, prop) {
+  const source = latest(state)   // copy_ ?? base_
+  const value = source[prop]
+  if (state.finalized_ || !isDraftable(value)) return value
+
+  // 检查是否是新值（不是 base_ 上的原始值）
+  if (value === peek(state.base_, prop)) {
+    prepareCopy(state)           // ★ 第一次访问时才创建 copy_！
+    return state.copy_[prop] = createProxy(scope, value, state)
+  }
+  return value                   // 已经 draft 过的直接返回
+}</code></pre>
+<div class="code-ref__notes">💡 <strong>关键设计</strong>：<code>peek()</code> 检查值是否等于 <code>base_</code> 上的原始值。只有当用户真的要修改时 <code>prepareCopy()</code> 才触发浅拷贝。大结构只读操作零开销。</div>
+</div>
+
+<h3>Proxy 陷阱：set — 智能跳过</h3>
+<div class="code-ref"><div class="code-ref__header"><span class="code-ref__path">src/core/proxy.ts — set trap（精简）</span></div>
+<pre><code>set(state, prop, value) {
+  if (!state.modified_) {
+    const current = peek(latest(state), prop)
+    if (is(value, current) && (value !== undefined || has(state.base_, prop)))
+      return true               // ★ 值没变，跳过
+
+    prepareCopy(state)          // 第一次修改才浅拷贝
+    markChanged(state)          // 标记 modified_，递归冒泡到 parent_
+  }
+  state.copy_[prop] = value
+  state.assigned_.set(prop, true)
+  handleCrossReference(state, prop, value)
+  return true
+}</code></pre>
+<div class="code-ref__notes">💡 <strong>设计意图</strong>：<code>is(value, current)</code> 用的是结构性相等（不是 ===），所以 <code>draft.x = {a:1}; draft.x = {a:1}</code> 不会触发两次拷贝。<code>markChanged</code> 递归冒泡到所有父 draft。</div>
+</div>
+
+<h3>终局化：finalize</h3>
+<div class="code-ref"><div class="code-ref__header"><span class="code-ref__path">src/core/finalize.ts — finalize()</span></div>
+<pre><code>function finalize(rootScope, value) {
+  if (isFrozen(value)) return value
+  const state = value[DRAFT_STATE]
+  if (!state) return handleValue(value, handledSet, rootScope)
+
+  if (!state.modified_) return state.base_  // ★ 未修改，直接返回原对象
+
+  if (!state.finalized_) {
+    const { callbacks_ } = state            // 执行所有子 draft 的回调
+    while (callbacks_.length > 0) {
+      callbacks_.pop()!(rootScope)
+    }
+    generatePatchesAndFinalize(state, rootScope)
+  }
+  return state.copy_                        // 返回复制品
+}</code></pre>
+<div class="code-ref__notes">💡 <strong>设计意图</strong>：<code>callbacks_</code> 是子 draft 注册的回调——父 draft 终局化时，子 draft 将自身的 <code>copy_</code> 写回到父的 <code>copy_</code> 中。保证深度嵌套对象的最终结果只包含修改过的路径上的新对象。</div>
+</div>
+</section>
+
+<section id="s5"><h2>5. 架构设计</h2>
+<h3>设计模式</h3>
+<table>
+<tr><th>模式</th><th>位置</th><th>作用</th></tr>
+<tr><td>Proxy 代理</td><td><code>Proxy.revocable(target, traps)</code></td><td>拦截读写，实现 copy-on-write</td></tr>
+<tr><td>写时复制</td><td><code>prepareCopy()</code> 惰性触发</td><td>只在修改时做浅拷贝</td></tr>
+<tr><td>回调链表</td><td><code>state.callbacks_</code></td><td>子 draft 终局化时通知父 draft 更新引用</td></tr>
+<tr><td>Scope 隔离</td><td><code>enterScope / leaveScope</code></td><td>隔离一次 produce 调用的所有 draft</td></tr>
+</table>
+
+<div class="callout callout-insight"><div class="callout-title">🧠 为什么用 Proxy.revocable？</div>
+<p><strong>直觉方案</strong>：创建普通 Proxy，等 GC 自动回收。</p>
+<p><strong>Immer 的做法</strong>：<code>Proxy.revocable(target, traps)</code> 返回 <code>{proxy, revoke}</code>，在 <code>revokeScope()</code> 时显式调用 <code>revoke()</code> 断绝 proxy→target 关联。断绝后任何对 proxy 的操作都抛 TypeError。</p>
+<p><strong>差异分析</strong>：防止用户在 produce 回调结束后继续持有 draft（常见错误），revoke 让这种误用立即报错，而不是静默产生不可预期的行为。</p>
+</div>
+
+<h3>draft 终局化回调链</h3>
+<pre class="mermaid">
+sequenceDiagram
+    participant User as 用户
+    participant Proxy as Draft Proxy
+    participant State as ImmerState
+    participant Parent as Parent Draft
+    participant Scope as ImmerScope
+
+    User->>Proxy: draft.child.name = 'x'
+    Proxy->>State: prepareCopy + markChanged
+    State->>Parent: markChanged(parent_) 递归冒泡
+    User->>Scope: recipe 执行完毕
+    Scope->>State: processResult → finalize
+    State->>State: 执行 callbacks_[0]
+    State->>Parent: updateDraftInParent(parent, draft, finalized)
+    Parent->>Parent: parent.copy_[key] = finalizedValue
+    Scope->>User: 返回 copy_ 树（已冻结）
+</pre>
+<p class="mermaid-caption">图：嵌套 draft 的终局化回调链</p>
+
+<div class="callout callout-warning"><div class="callout-title">⚠️ 易错点</div>
+<p><strong>错误用法</strong>：在 produce 回调外用 draft 引用。</p>
+<pre><code>let draftRef
+const next = produce(state, draft => {
+  draftRef = draft  // ❌ 存储 draft 引用
+  draft.a = 1
+})
+draftRef.b = 2       // ❌ 报错：proxy 已 revoke</code></pre>
+<p><strong>原因</strong>：<code>revokeScope()</code> 在 produce 返回后立即调用 <code>proxy.revoke()</code>，此后任何对 draft 的操作都抛 TypeError。</p>
+</div>
+</section>
+
+<section id="s6"><h2>6. 同类库对比</h2>
+<table>
+<tr><th></th><th>Immer</th><th>Immutable.js</th><th>手写展开</th></tr>
+<tr><td>API 风格</td><td>可变语法</td><td>函数式 API</td><td>展开运算符</td></tr>
+<tr><td>学习成本</td><td>极低</td><td>高</td><td>低</td></tr>
+<tr><td>结构共享</td><td>✅ 自动</td><td>✅ 自动</td><td>❌ 手动</td></tr>
+<tr><td>包大小</td><td>~4KB</td><td>~60KB</td><td>0KB</td></tr>
+<tr><td>深层嵌套</td><td>✅ 流畅</td><td>✅ 专用 API</td><td>❌ 灾难</td></tr>
+<tr><td>TypeScript</td><td>✅ 完整</td><td>✅ 完整</td><td>✅</td></tr>
+</table>
+</section>
+
+<section id="s7"><h2>7. 学习要点</h2>
+<h3>可复用的工程实践</h3>
+<ol>
+<li><strong>惰性浅拷贝</strong>：第一次写时触发 <code>prepareCopy()</code>，大结构只读操作零开销</li>
+<li><strong>回调链表管理子树</strong>：<code>state.callbacks_</code> 统一在 finalize 时批量执行</li>
+<li><strong><code>Proxy.revocable</code> 防误用</strong>：而不是靠文档提醒"别在回调外用 draft"</li>
+<li><strong>Scope 隔离</strong>：嵌套 produce 调用互不干扰</li>
+</ol>
+<h3>可借鉴的架构模式</h3>
+<ol>
+<li><strong>写时复制 + 批量终局化</strong>：分离修改收集和结果生成，消除中间拷贝</li>
+<li><strong>结构性相等判断</strong>：<code>is()</code> 深比较防止无效修改触发拷贝</li>
+<li><strong><code>updateDraftInParent</code></strong>：支持同一 draft 出现在多个父节点中</li>
+</ol>
+<h3>进一步阅读</h3>
+<ol>
+<li><code>src/core/proxy.ts</code> — 完整 arrayTraps 和 Map/Set plugin</li>
+<li><code>src/plugins/patches.ts</code> — JSON Patch (RFC 6902) 生成原理</li>
+<li><code>__performance_tests__/</code> — 官方的性能基准测试</li>
+</ol>
+</section>
+</main></div></body></html>

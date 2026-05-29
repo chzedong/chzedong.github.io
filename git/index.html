@@ -1,0 +1,1155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Git 内部原理深度解构 — 数据模型、协同策略与冲突解决</title>
+  <style>
+    :root {
+      --color-bg: #ffffff;
+      --color-bg-secondary: #f8f9fa;
+      --color-bg-tertiary: #f1f3f5;
+      --color-text: #1a1a2e;
+      --color-text-secondary: #495057;
+      --color-text-muted: #868e96;
+      --color-border: #dee2e6;
+      --color-border-light: #e9ecef;
+      --color-primary: #2563eb;
+      --color-primary-light: #eff6ff;
+      --color-primary-dark: #1d4ed8;
+      --color-accent: #7c3aed;
+      --color-accent-light: #f5f3ff;
+      --color-success: #059669;
+      --color-success-bg: #ecfdf5;
+      --color-warning: #d97706;
+      --color-warning-bg: #fffbeb;
+      --color-danger: #dc2626;
+      --color-danger-bg: #fef2f2;
+      --color-info: #0891b2;
+      --color-info-bg: #ecfeff;
+      --color-code-bg: #f1f5f9;
+      --color-code-text: #1e293b;
+      --color-inline-code-bg: #f1f5f9;
+      --color-inline-code-text: #e11d48;
+      --sidebar-width: 260px;
+      --header-height: 60px;
+      --max-content-width: 900px;
+      --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
+      --font-mono: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", "Consolas", "Courier New", monospace;
+      --radius: 8px;
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+      --transition: 150ms ease;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --color-bg: #0f172a;
+        --color-bg-secondary: #1e293b;
+        --color-bg-tertiary: #334155;
+        --color-text: #e2e8f0;
+        --color-text-secondary: #94a3b8;
+        --color-text-muted: #64748b;
+        --color-border: #334155;
+        --color-border-light: #1e293b;
+        --color-primary: #3b82f6;
+        --color-primary-light: #1e3a5f;
+        --color-primary-dark: #60a5fa;
+        --color-accent: #8b5cf6;
+        --color-accent-light: #2e1065;
+        --color-success: #10b981;
+        --color-success-bg: #064e3b;
+        --color-warning: #f59e0b;
+        --color-warning-bg: #451a03;
+        --color-danger: #f87171;
+        --color-danger-bg: #450a0a;
+        --color-info: #22d3ee;
+        --color-info-bg: #083344;
+        --color-code-bg: #1e293b;
+        --color-code-text: #e2e8f0;
+        --color-inline-code-bg: #334155;
+        --color-inline-code-text: #f87171;
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+      }
+      .kw { color: #a78bfa; }
+      .str { color: #34d399; }
+      .num { color: #fbbf24; }
+      .cm { color: #64748b; }
+      .fn { color: #60a5fa; }
+      .op { color: #f87171; }
+      .type { color: #22d3ee; }
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; scroll-padding-top: calc(var(--header-height) + 20px); }
+    body {
+      font-family: var(--font-sans); font-size: 15px; line-height: 1.7;
+      color: var(--color-text); background: var(--color-bg);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .layout { display: flex; min-height: 100vh; }
+    .sidebar {
+      position: fixed; top: 0; left: 0; width: var(--sidebar-width);
+      height: 100vh; background: var(--color-bg-secondary);
+      border-right: 1px solid var(--color-border); overflow-y: auto;
+      padding: 24px 20px; z-index: 100;
+    }
+    .sidebar-header {
+      font-size: 13px; font-weight: 600; color: var(--color-text-muted);
+      text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 16px;
+      padding-bottom: 12px; border-bottom: 1px solid var(--color-border);
+    }
+    .sidebar-title { font-size: 16px; font-weight: 700; color: var(--color-text); margin-bottom: 20px; line-height: 1.3; }
+    .sidebar-title a { color: inherit; text-decoration: none; }
+    .sidebar-nav { list-style: none; }
+    .sidebar-nav li { margin-bottom: 2px; }
+    .sidebar-nav a {
+      display: block; padding: 6px 12px; border-radius: 6px;
+      color: var(--color-text-secondary); text-decoration: none; font-size: 14px;
+      transition: all var(--transition);
+    }
+    .sidebar-nav a:hover { background: var(--color-bg-tertiary); color: var(--color-text); }
+    .sidebar-nav .sub-nav { padding-left: 16px; }
+    .sidebar-nav .sub-nav a { font-size: 13px; }
+
+    .main {
+      margin-left: var(--sidebar-width); flex: 1;
+      max-width: var(--max-content-width); padding: 48px 56px 80px;
+    }
+
+    .page-header { margin-bottom: 40px; padding-bottom: 32px; border-bottom: 1px solid var(--color-border); }
+    .page-header h1 { font-size: 32px; font-weight: 800; line-height: 1.2; margin-bottom: 12px; letter-spacing: -0.02em; }
+    .page-header .subtitle { font-size: 17px; color: var(--color-text-secondary); line-height: 1.6; margin-bottom: 16px; }
+    .badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .badge {
+      display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 20px;
+      font-size: 12px; font-weight: 500; background: var(--color-bg-tertiary); color: var(--color-text-secondary);
+    }
+    .badge-primary { background: var(--color-primary-light); color: var(--color-primary); }
+    .badge-accent { background: var(--color-accent-light); color: var(--color-accent); }
+    .badge-success { background: var(--color-success-bg); color: var(--color-success); }
+
+    section { margin-bottom: 48px; }
+    section h2 {
+      font-size: 24px; font-weight: 700; margin-bottom: 16px; padding-bottom: 8px;
+      border-bottom: 1px solid var(--color-border-light); letter-spacing: -0.01em;
+    }
+    section h3 { font-size: 19px; font-weight: 600; margin-top: 28px; margin-bottom: 12px; }
+    section h4 { font-size: 16px; font-weight: 600; color: var(--color-text-secondary); margin-top: 20px; margin-bottom: 8px; }
+    section p { margin-bottom: 14px; color: var(--color-text-secondary); }
+    section ul, section ol { margin-bottom: 14px; padding-left: 24px; color: var(--color-text-secondary); }
+    section li { margin-bottom: 6px; }
+    section a { color: var(--color-primary); text-decoration: none; }
+    section a:hover { text-decoration: underline; }
+
+    code {
+      font-family: var(--font-mono); font-size: 13px; background: var(--color-inline-code-bg);
+      color: var(--color-inline-code-text); padding: 2px 6px; border-radius: 4px;
+    }
+    pre {
+      background: var(--color-code-bg); color: var(--color-code-text); border-radius: var(--radius);
+      padding: 20px 24px; overflow-x: auto; margin-bottom: 18px;
+      border: 1px solid var(--color-border-light); font-size: 13px; line-height: 1.6;
+    }
+    pre code { background: none; color: inherit; padding: 0; font-size: inherit; }
+
+    .kw { color: #7c3aed; font-weight: 600; }
+    .str { color: #059669; }
+    .num { color: #d97706; }
+    .cm { color: #868e96; font-style: italic; }
+    .fn { color: #2563eb; }
+    .op { color: #dc2626; }
+    .type { color: #0891b2; }
+
+    .callout {
+      padding: 16px 20px; border-radius: var(--radius); margin-bottom: 18px;
+      border-left: 4px solid; font-size: 14px;
+    }
+    .callout-title { font-weight: 600; margin-bottom: 4px; }
+    .callout-info { background: var(--color-info-bg); border-color: var(--color-info); }
+    .callout-tip { background: var(--color-success-bg); border-color: var(--color-success); }
+    .callout-warning { background: var(--color-warning-bg); border-color: var(--color-warning); }
+    .callout-danger { background: var(--color-danger-bg); border-color: var(--color-danger); }
+    .callout-insight { background: var(--color-accent-light); border-color: var(--color-accent); }
+
+    table { width: 100%; border-collapse: collapse; margin-bottom: 18px; font-size: 14px; }
+    th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--color-border-light); }
+    th { font-weight: 600; color: var(--color-text); background: var(--color-bg-secondary); font-size: 13px; text-transform: uppercase; letter-spacing: 0.03em; }
+    td { color: var(--color-text-secondary); }
+    tr:hover td { background: var(--color-bg-secondary); }
+
+    .mermaid { margin: 20px 0; padding: 20px; background: var(--color-bg-secondary); border-radius: var(--radius); border: 1px solid var(--color-border-light); overflow-x: auto; }
+    .mermaid-caption { text-align: center; font-size: 13px; color: var(--color-text-muted); margin-top: -16px; margin-bottom: 20px; }
+    .mermaid svg { max-width: 100%; height: auto; }
+
+    .dir-tree {
+      font-family: var(--font-mono); font-size: 13px; line-height: 1.8;
+      color: var(--color-text-secondary); background: var(--color-code-bg);
+      padding: 16px 20px; border-radius: var(--radius); margin-bottom: 18px;
+      white-space: pre; overflow-x: auto; border: 1px solid var(--color-border-light);
+    }
+    .dir-tree .comment { color: var(--color-text-muted); }
+    .dir-tree .dir { color: var(--color-primary); font-weight: 600; }
+    .dir-tree .file { color: var(--color-text-secondary); }
+    .dir-tree .important { color: var(--color-accent); font-weight: 600; }
+
+    .flow-steps {
+      counter-reset: step; list-style: none; padding: 0; margin-bottom: 20px;
+    }
+    .flow-steps li {
+      counter-increment: step; position: relative; padding-left: 40px;
+      margin-bottom: 16px; padding-bottom: 16px; border-left: 2px solid var(--color-border);
+    }
+    .flow-steps li:last-child { border-left-color: transparent; }
+    .flow-steps li::before {
+      content: counter(step); position: absolute; left: -14px; top: 0;
+      width: 26px; height: 26px; border-radius: 50%; background: var(--color-primary);
+      color: #fff; font-size: 12px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .reading-path { list-style: none; padding: 0; margin-bottom: 20px; }
+    .reading-path li {
+      display: flex; align-items: baseline; gap: 12px; padding: 10px 14px;
+      margin-bottom: 4px; border-radius: 6px; background: var(--color-bg-secondary); font-size: 14px;
+    }
+    .reading-path .step-num {
+      flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%;
+      background: var(--color-primary); color: #fff; font-size: 11px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .reading-path .step-file {
+      font-family: var(--font-mono); font-weight: 600; color: var(--color-text); min-width: 180px;
+    }
+    .reading-path .step-desc { color: var(--color-text-secondary); }
+
+    .highlight { background: linear-gradient(120deg, var(--color-warning-bg) 0%, var(--color-warning-bg) 100%); padding: 2px 4px; border-radius: 2px; }
+    .text-muted { color: var(--color-text-muted); }
+    .text-sm { font-size: 13px; }
+
+    @media (max-width: 1024px) {
+      .sidebar { transform: translateX(-100%); }
+      .sidebar.open { transform: translateX(0); }
+      .main { margin-left: 0; padding: 32px 24px; }
+    }
+    @media (max-width: 640px) {
+      .page-header h1 { font-size: 24px; }
+      section h2 { font-size: 20px; }
+      section h3 { font-size: 17px; }
+    }
+    @media print {
+      .sidebar { display: none; }
+      .main { margin-left: 0; padding: 0; max-width: 100%; }
+      pre, .dir-tree { white-space: pre-wrap; word-break: break-all; }
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>mermaid.initialize({ startOnLoad: true, theme: 'default' });</script>
+</head>
+
+<body>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">开源库解构</div>
+      <div class="sidebar-title"><a href="#">Git 内部原理</a></div>
+      <ul class="sidebar-nav">
+        <li><a href="#s1">1. 项目背景</a></li>
+        <li><a href="#s15">1.5 快速上手</a></li>
+        <li><a href="#s2">2. 数据原理 — Git 对象模型</a></li>
+        <li class="sub-nav">
+          <a href="#s2a">2.1 Blob — 内容寻址</a>
+          <a href="#s2b">2.2 Tree — 目录快照</a>
+          <a href="#s2c">2.3 Commit — 不可变历史</a>
+          <a href="#s2d">2.4 Tag — 带注释的锚点</a>
+          <a href="#s2e">2.5 引用与符号链接</a>
+          <a href="#s2f">2.6 Packfile 压缩</a>
+        </li>
+        <li><a href="#s3">3. 暂存区 (Index) 原理</a></li>
+        <li><a href="#s4">4. 核心协同策略</a></li>
+        <li class="sub-nav">
+          <a href="#s4a">4.1 分布式模型</a>
+          <a href="#s4b">4.2 Fetch / Pull / Push</a>
+          <a href="#s4c">4.3 Rebase vs Merge</a>
+          <a href="#s4d">4.4 远程跟踪分支</a>
+        </li>
+        <li><a href="#s5">5. 冲突解决方案</a></li>
+        <li class="sub-nav">
+          <a href="#s5a">5.1 三方合并算法</a>
+          <a href="#s5b">5.2 冲突标记</a>
+          <a href="#s5c">5.3 Rerere 自动解决</a>
+          <a href="#s5d">5.4 Merge Strategy 对比</a>
+        </li>
+        <li><a href="#s6">6. 算法与数据结构</a></li>
+        <li class="sub-nav">
+          <a href="#s6a">6.1 DAG 提交图</a>
+          <a href="#s6b">6.2 Diff 算法 (Myers)</a>
+          <a href="#s6c">6.3 Delta 压缩</a>
+          <a href="#s6d">6.4 垃圾回收</a>
+        </li>
+        <li><a href="#s7">7. 同类工具对比</a></li>
+        <li><a href="#s8">8. 架构设计深度剖析</a></li>
+        <li><a href="#s9">9. 历史演进 &amp; 关键决策</a></li>
+        <li><a href="#s10">10. 学习要点总结</a></li>
+      </ul>
+    </aside>
+
+    <main class="main" id="main-content">
+
+      <!-- ====== Header ====== -->
+      <div class="page-header">
+        <h1>Git 内部原理深度解构</h1>
+        <p class="subtitle">数据模型 · 分布式协同 · 冲突解决 · 核心算法 — 从对象存储到三方合并的完整剖析</p>
+        <div class="badges">
+          <span class="badge badge-primary">C 语言</span>
+          <span class="badge badge-accent">内容寻址</span>
+          <span class="badge badge-success">分布式 VCS</span>
+          <span class="badge">v2.47+</span>
+          <span class="badge">SHA-1 / SHA-256</span>
+          <span class="badge">GPL-2.0</span>
+        </div>
+      </div>
+
+      <!-- ====== Section 1: 项目背景 ====== -->
+      <section id="s1">
+        <h2>1. 项目背景</h2>
+        <p>
+          Git 由 <strong>Linus Torvalds</strong> 于 2005 年 4 月创建，初衷是为 Linux 内核开发提供一个高性能、分布式、不可篡改的版本控制系统。
+          在 BitKeeper 许可证争端之后，Linus 花了约 <strong>10 天</strong> 写出了 Git 的第一个可用版本。
+        </p>
+
+        <div class="callout callout-info">
+          <div class="callout-title">💡 设计目标（Linus 原话）</div>
+          <ul style="margin-bottom:0;">
+            <li>将 Concurrent Versions System (CVS) 作为<strong>反面教材</strong> — 所有 CVS 做错的事情，Git 都要做对</li>
+            <li>支持分布式工作流 — 不依赖中央服务器</li>
+            <li>强数据完整性 — 用 SHA-1 哈希保证内容不可篡改</li>
+            <li>高性能 — 分支切换、合并、diff 操作均为 O(1) 或接近 O(1)</li>
+          </ul>
+        </div>
+
+        <p><strong>核心解决的问题：</strong></p>
+        <ul>
+          <li><strong>数据完整性</strong>：每个对象由 SHA-1 哈希寻址，任何篡改都会改变哈希值</li>
+          <li><strong>分布式协作</strong>：每个 clone 都是完整仓库副本，无需网络即可提交、分支、合并</li>
+          <li><strong>非线性开发</strong>：轻量级分支（一个 41 字节的文件）鼓励并行开发</li>
+          <li><strong>高效存储</strong>：通过 delta 压缩和 packfile 大幅减少存储开销</li>
+        </ul>
+      </section>
+
+      <!-- ====== Section 1.5: 快速上手 ====== -->
+      <section id="s15">
+        <h2>1.5 快速上手</h2>
+        <h3>最小可运行示例</h3>
+        <pre><code><span class="cm"># 初始化仓库并创建第一个提交</span>
+git init my-project <span class="op">&&</span> <span class="kw">cd</span> my-project
+<span class="kw">echo</span> <span class="str">"hello git"</span> <span class="op">&gt;</span> README.md
+git add README.md <span class="op">&&</span> git commit <span class="op">-</span>m <span class="str">"first commit"</span></code></pre>
+
+        <h3>查看 Git 内部对象的底层命令</h3>
+        <pre><code><span class="cm"># 查看 commit 对象内容</span>
+git cat-file <span class="op">-</span>p HEAD
+
+<span class="cm"># 查看 tree 对象内容</span>
+git cat-file <span class="op">-</span>p HEAD^{tree}
+
+<span class="cm"># 查看 blob 对象的原始内容</span>
+git hash-object README.md          <span class="cm"># 计算 hash</span>
+git cat-file <span class="op">-</span>p <span class="op">&lt;</span>blob_hash<span class="op">&gt;</span>       <span class="cm"># 查看内容</span></code></pre>
+
+        <h3>常见协同场景</h3>
+        <pre><code><span class="cm"># 场景1：分支 + 合并</span>
+git checkout <span class="op">-</span>b feature/x
+<span class="cm"># ... 修改文件 ...</span>
+git commit <span class="op">-</span>am <span class="str">"feature done"</span>
+git checkout main
+git merge feature/x
+
+<span class="cm"># 场景2：协作冲突解决</span>
+git fetch origin
+git rebase origin/main        <span class="cm"># 变基到最新，可能产生冲突</span>
+<span class="cm"># ... 解决冲突后 ...</span>
+git add <span class="op">.</span> <span class="op">&&</span> git rebase <span class="op">--</span>continue</code></pre>
+      </section>
+
+      <!-- ====== Section 2: 数据原理 ====== -->
+      <section id="s2">
+        <h2>2. 数据原理 — Git 对象模型</h2>
+        <p>
+          Git 的核心本质上是一个<strong>内容寻址文件系统 (content-addressable filesystem)</strong>，
+          上层再包装了一套 VCS 用户界面。理解了四种对象类型，就理解了 Git 的全部数据流。
+        </p>
+
+        <pre class="mermaid">
+flowchart TD
+    subgraph 工作区
+        WD["working directory\n(文件系统)"]
+    end
+    subgraph 暂存区
+        IDX["index / staging area\n(.git/index)"]
+    end
+    subgraph 对象数据库
+        B[Blob\n文件内容]
+        T[Tree\n目录结构]
+        C[Commit\n提交快照]
+        TG[Tag\n带注释标签]
+    end
+    subgraph 引用层
+        BR[Branch\nrefs/heads/*]
+        HD[HEAD\n当前检出]
+        RR[Remote Refs\nrefs/remotes/*]
+    end
+
+    WD -- "git add" --> IDX
+    IDX -- "git commit" --> C
+    C --> T
+    T --> B
+    C --> C
+    BR --> C
+    HD --> BR
+    TG --> C
+</pre>
+        <p class="mermaid-caption">图：Git 的四层体系 — 工作区 / 暂存区 / 对象数据库 / 引用层</p>
+
+        <!-- 2a: Blob -->
+        <h3 id="s2a">2.1 Blob — 内容寻址的基石</h3>
+        <p>
+          <strong>Blob (Binary Large Object)</strong> 只存储文件<strong>内容</strong>，不存储文件名、路径或权限。
+          同一个内容只有一个 blob，所有文件名指向它。这是 Git 去重的基础。
+        </p>
+
+        <pre><code><span class="cm"># Blob 对象格式（Git 内部存储）</span>
+<span class="str">"blob &lt;content_length&gt;\0"</span> <span class="op">+</span> file_content
+<span class="cm"># SHA-1("blob 11\0hello world") = 3b18e512dba79e4c8300dd08aeb37f8e728b8dad</span></code></pre>
+
+        <div class="callout callout-insight">
+          <div class="callout-title">🧠 如果让你来实现...</div>
+          <p><strong>问题</strong>：如何存储文件的不同版本？</p>
+          <p><strong>直觉方案</strong>：以文件路径为 key，存储增量差异（类似 SVN）</p>
+          <p><strong>Git 的实际做法</strong>：以内容的 SHA-1 哈希为 key，相同内容只存一份。文件名/路径存储在 tree 对象中，与内容数据分离</p>
+          <p><strong>差异分析</strong>：直觉方案使得重命名/移动文件的 diff 变得昂贵；Git 的方案天然支持去重、内容校验，且文件移动只改变 tree 而不改变 blob</p>
+        </div>
+
+        <!-- 2b: Tree -->
+        <h3 id="s2b">2.2 Tree — 目录快照</h3>
+        <p>
+          <strong>Tree 对象</strong> 存储目录结构：每一行是一个条目，包含文件模式、对象类型（blob 或 tree）、SHA-1 哈希和文件名。
+          Tree 递归嵌套 Tree，形成完整的目录树。
+        </p>
+
+        <pre><code><span class="cm"># Tree 条目格式（简化）</span>
+<span class="num">100644</span> blob a906cb2a4a904a152e80877d4088654daad0c859  README.md
+<span class="num">100755</span> blob 8f7dfe28c5c5e7a1b4d2a95c2f6d2c4f8e1a3b6d  script.sh
+<span class="num">040000</span> tree 4b825dc642cb6eb9a060e54bf8dc4000fb5c0f5a  src</code></pre>
+
+        <pre class="mermaid">
+flowchart LR
+    C["Commit\na1b2c3..."] --> TR["Tree (root)\n4b825d..."]
+    TR --> B1["Blob\nREADME.md"]
+    TR --> T2["Tree (src/)\n8f7dfe..."]
+    T2 --> B3["Blob\nmain.c"]
+    T2 --> B4["Blob\nutil.c"]
+</pre>
+        <p class="mermaid-caption">图：Commit → Tree → Blob 的三级索引链</p>
+
+        <!-- 2c: Commit -->
+        <h3 id="s2c">2.3 Commit — 不可变历史节点</h3>
+        <p>
+          <strong>Commit 对象</strong> 是 Git 历史的基本单元，包含：一棵 tree（项目快照）、
+          零到多个 parent commit（形成 DAG）、作者/提交者信息、时间戳和提交信息。
+        </p>
+
+        <pre><code><span class="cm"># git cat-file -p HEAD 的典型输出</span>
+tree 4b825dc642cb6eb9a060e54bf8dc4000fb5c0f5a
+parent a1b2c3d4e5f6789012345678901234567890abcd
+author Linus Torvalds <span class="op">&lt;</span>torvalds<span class="op">@</span>linux-foundation.org<span class="op">&gt;</span> <span class="num">1716500000</span> <span class="op">-</span><span class="num">0700</span>
+committer Linus Torvalds <span class="op">&lt;</span>torvalds<span class="op">@</span>linux-foundation.org<span class="op">&gt;</span> <span class="num">1716500000</span> <span class="op">-</span><span class="num">0700</span>
+
+Add feature X
+
+This commit introduces the long-awaited feature X.
+Signed-off-by: ...</code></pre>
+
+        <div class="callout callout-tip">
+          <div class="callout-title">💡 关键洞察：commit 不可变</div>
+          <p>一旦创建，commit 对象 <strong>永不修改</strong>。修改历史（如 <code>rebase</code>、<code>amend</code>）实际是<strong>创建新 commit</strong>，旧 commit 保留在对象库中直到被 GC 回收。这就是为什么 <code>git reflog</code> 能恢复 "丢失" 的提交。</p>
+        </div>
+
+        <!-- 2d: Tag -->
+        <h3 id="s2d">2.4 Tag — 带注释的里程碑</h3>
+        <p>
+          <strong>轻量标签 (Lightweight Tag)</strong> 只是一个指向 commit 的引用（ref），
+          而 <strong>注释标签 (Annotated Tag)</strong> 本身是一个 Git 对象，包含标签名、信息、日期和 GPG 签名。
+        </p>
+
+        <pre><code><span class="cm"># Annotated tag 对象内容</span>
+object 4b825dc642cb6eb9a060e54bf8dc4000fb5c0f5a
+type commit
+tag v2.47.0
+tagger Junio C Hamano <span class="op">&lt;</span>gitster<span class="op">@</span>pobox.com<span class="op">&gt;</span> <span class="num">1729000000</span> <span class="op">+</span><span class="num">0900</span>
+
+Git v2.47.0 Release
+-----BEGIN PGP SIGNATURE-----</code></pre>
+
+        <!-- 2e: 引用 -->
+        <h3 id="s2e">2.5 引用层级 — 命名的指针</h3>
+        <p>Git 的所有"命名" —— 分支、标签、HEAD、远程引用 —— 都只是<strong>指向某个 SHA-1 的指针文件</strong>。</p>
+
+        <pre><code><span class="cm"># .git/refs/heads/main 的内容（仅41字节）</span>
+4b825dc642cb6eb9a060e54bf8dc4000fb5c0f5a
+
+<span class="cm"># HEAD 是一个符号引用</span>
+<span class="cm"># .git/HEAD 的内容：</span>
+ref: refs/heads/main                  <span class="cm"># 正常状态 → 指向一个分支</span>
+4b825dc642cb6eb9a060e54bf8dc4000fb5c0f5a  <span class="cm"># detached HEAD → 直接指向 commit</span></code></pre>
+
+        <pre class="mermaid">
+flowchart TD
+    HD["HEAD\n.git/HEAD"] -->|"ref: refs/heads/main"| BR["refs/heads/main\n41字节文件"]
+    BR --> C3["commit: C3"]
+    C3 --> C2["commit: C2"]
+    C2 --> C1["commit: C1"]
+
+    TAG["refs/tags/v1.0"] --> C2
+    RR["refs/remotes/origin/main"] --> C3
+</pre>
+        <p class="mermaid-caption">图：引用层级 — 所有命名都是指向 commit 的指针</p>
+
+        <!-- 2f: Packfile -->
+        <h3 id="s2f">2.6 Packfile — 存储压缩</h3>
+        <p>
+          Git 默认以 <strong>loose object</strong> 格式存储每个对象（zlib 压缩后放入 <code>.git/objects/xx/xxxx...</code>）。
+          当对象过多或执行 <code>git gc</code> 时，会将它们打包成 <strong>packfile</strong>，
+          在其中通过 delta 差异链只存储对象间的增量。
+        </p>
+
+        <pre class="mermaid">
+flowchart LR
+    subgraph Loose
+        O1["obj/3b\n/18e..."]
+        O2["obj/a9\n/06c..."]
+        O3["obj/8f\n/7df..."]
+    end
+    subgraph Packed
+        P["pack-xxx.pack\n最新版(全量) ← delta1 ← delta2"]
+        IDX["pack-xxx.idx\n哈希 → 偏移量 索引"]
+    end
+    Loose -- "git gc" --> Packed
+</pre>
+        <p class="mermaid-caption">图：Loose object → Packfile 的压缩流程</p>
+
+        <div class="callout callout-warning">
+          <div class="callout-title">⚠️ 性能注意</div>
+          <p>Packfile 按<strong>启发式算法</strong>选择 delta base —— 优先选择最近的文件版本、相同命名的文件、大小相近的文件。这是 Git 存储效率高的核心原因，但也是 <code>git gc</code> 耗时的主要来源。</p>
+        </div>
+      </section>
+
+      <!-- ====== Section 3: 暂存区 ====== -->
+      <section id="s3">
+        <h2>3. 暂存区 (Index) 原理</h2>
+        <p>
+          暂存区是 Git 区别于其他 VCS 的核心设计。<code>.git/index</code> 是一个二进制文件，存储了下次提交的完整 tree 快照。
+          它不是一个 "diff"，而是一个<strong>完整的待提交视图</strong>。
+        </p>
+
+        <pre class="mermaid">
+flowchart TD
+    WD["工作区\n(file stats)"]
+    IDX["暂存区 Index\n(.git/index)"]
+    OBJ["对象数据库\n(.git/objects)"]
+
+    WD -- "git add → 计算 SHA-1\n将 blob 写入 objects\n更新 index 条目" --> IDX
+    IDX -- "git commit → 将 index 的内容\n写入 tree + commit 对象" --> OBJ
+    OBJ -- "git checkout → 将 tree\n展开到 index 和工作区" --> IDX
+    OBJ -- "git checkout → 将 tree\n展开到 index 和工作区" --> WD
+</pre>
+        <p class="mermaid-caption">图：Index 在三个区域间的桥梁角色</p>
+
+        <h4>Index 条目结构（简化）</h4>
+        <pre><code><span class="cm">// .git/index 中的每条记录</span>
+ctime_sec, ctime_nsec     <span class="cm">// 文件元数据变更时间</span>
+mtime_sec, mtime_nsec     <span class="cm">// 文件内容修改时间</span>
+dev, ino, mode, uid, gid  <span class="cm">// stat 信息（用于快速变更检测）</span>
+file_size
+sha1                      <span class="cm">// blob 的 SHA-1 哈希</span>
+flags                     <span class="cm">// assume-unchanged, intent-to-add 等</span>
+file_path                 <span class="cm">// 以 null 结尾的路径</span></code></pre>
+
+        <div class="callout callout-insight">
+          <div class="callout-title">🧠 如果让你来实现...</div>
+          <p><strong>问题</strong>：如何在提交前预览将要提交的内容？</p>
+          <p><strong>直觉方案</strong>：提交时计算工作区与 HEAD 的 diff，选择性地包含某些文件</p>
+          <p><strong>Git 的实际做法</strong>：Index 是一个完整的中间快照，<code>git add</code> 就是在构建这个快照</p>
+          <p><strong>差异分析</strong>：直觉方案在部分提交时计算复杂（"我只提交这 3 行"），而 Index 方案允许逐块暂存（<code>git add -p</code>），
+          因为它操作的是一个明确的中间状态而非动态 diff</p>
+        </div>
+      </section>
+
+      <!-- ====== Section 4: 核心协同策略 ====== -->
+      <section id="s4">
+        <h2>4. 核心协同策略</h2>
+
+        <h3 id="s4a">4.1 分布式协同模型</h3>
+        <p>
+          Git 是<strong>完全分布式</strong>的版本控制系统。没有 "中央仓库" 的架构概念 ——
+          每个 clone 拥有完整的历史、所有分支和标签。这是通过 Git 的对象模型实现的：
+          只要你有 commit 的 SHA-1，就能从对象数据库中取出完整的 tree 和 blob。
+        </p>
+
+        <pre class="mermaid">
+flowchart TD
+    subgraph A["开发者 A 仓库"]
+        A_MAIN["main"]
+        A_FEAT["feature/a"]
+    end
+    subgraph B["开发者 B 仓库"]
+        B_MAIN["main"]
+        B_FIX["fix/bug"]
+    end
+    subgraph R["远程仓库 origin"]
+        R_MAIN["origin/main"]
+        R_DEV["origin/dev"]
+    end
+
+    A -- "git push" --> R
+    R -- "git fetch/pull" --> A
+    B -- "git push" --> R
+    R -- "git fetch/pull" --> B
+    A <-..->|"format-patch / email"| B
+</pre>
+        <p class="mermaid-caption">图：分布式模型 — 远程仓库只是另一个 Git 仓库；协作者也可以直接交换 patch</p>
+
+        <h3 id="s4b">4.2 Fetch / Pull / Push 的数据流</h3>
+        <ol class="flow-steps">
+          <li>
+            <strong>git fetch</strong>：从远程下载缺失的 object（blob/tree/commit），
+            更新 <code>refs/remotes/origin/*</code>，但<strong>不修改</strong>本地分支和工作区
+          </li>
+          <li>
+            <strong>git merge / git rebase</strong>：将远程跟踪分支的变更整合到本地分支
+          </li>
+          <li>
+            <strong>git pull = git fetch + git merge/rebase</strong>：两步合一
+          </li>
+          <li>
+            <strong>git push</strong>：将本地 commit 发送到远程，要求远程分支是快进 (fast-forward)
+            —— 非快进推送会被拒绝，防止覆盖他人工作
+          </li>
+        </ol>
+
+        <h3 id="s4c">4.3 Rebase vs Merge — 两种整合策略</h3>
+
+        <table>
+          <tr><th>维度</th><th>Merge</th><th>Rebase</th></tr>
+          <tr>
+            <td>工作原理</td>
+            <td>创建一个新的 merge commit，有两个 parent</td>
+            <td>将当前分支的 commit 逐个重放到目标分支顶部</td>
+          </tr>
+          <tr>
+            <td>历史图</td>
+            <td>保留完整的 DAG 分支拓扑</td>
+            <td>线性历史，分支点信息丢失</td>
+          </tr>
+          <tr>
+            <td>冲突解决</td>
+            <td>一次性解决所有冲突</td>
+            <td>每个 commit 可能独立产生冲突</td>
+          </tr>
+          <tr>
+            <td>适用场景</td>
+            <td>公共分支合并、release 分支</td>
+            <td>个人 feature 分支、"整洁历史" 追求</td>
+          </tr>
+          <tr>
+            <td>黄金法则</td>
+            <td>—</td>
+            <td><strong>不要 rebase 已推送的公共历史</strong></td>
+          </tr>
+        </table>
+
+        <pre class="mermaid">
+flowchart LR
+    subgraph "Merge 策略"
+        M_C1["A"] --> M_C2["B"] --> M_C3["M (merge commit)"]
+        M_C1 --> M_C4["C"] --> M_C3
+    end
+    subgraph "Rebase 策略"
+        R_C1["A"] --> R_C2["B"] --> R_C3["C' (重写)"]
+    end
+</pre>
+        <p class="mermaid-caption">图：Merge 保留 DAG 分叉，Rebase 重写为线性</p>
+
+        <h3 id="s4d">4.4 远程跟踪分支与 reflog</h3>
+        <p>
+          <strong>远程跟踪分支</strong> (<code>refs/remotes/origin/main</code>) 是上次 fetch 时远程仓库状态的本地缓存。
+          它不是你本地的 <code>main</code> 分支 —— 你可以在本地 <code>main</code> 上继续提交，
+          然后用 <code>git diff origin/main</code> 对比差异。
+        </p>
+        <p>
+          <strong>Reflog</strong> (<code>.git/logs/</code>) 记录了每个引用在<strong>本地</strong>的变更历史（默认保留 90 天），
+          是 "救命稻草"：误操作 <code>git reset --hard</code> 后可通过 <code>git reflog</code> 找回丢失的 commit。
+        </p>
+      </section>
+
+      <!-- ====== Section 5: 冲突解决方案 ====== -->
+      <section id="s5">
+        <h2>5. 冲突解决方案 — 剖析三方合并</h2>
+
+        <p>
+          冲突的本质：<strong>两个修改者对同一段代码做出了不同的修改</strong>，且无法自动判定哪个是正确的。
+          理解 Git 如何 <em>检测</em>、<em>标记</em>、<em>帮助解决</em> 冲突，是掌握协同开发的关键。
+        </p>
+
+        <h3 id="s5a">5.1 三方合并 (Three-Way Merge) 算法</h3>
+
+        <pre class="mermaid">
+flowchart TD
+    BASE["Base (共同祖先)\nline 1\nline 2\nline 3"] --> OUR
+    BASE --> THEIR
+    OUR["Ours (当前分支)\nline 1\nline 2 modified by us\nline 3"] --> RESULT
+    THEIR["Theirs (合并分支)\nline 1\nline 2 modified by them\nline 3"] --> RESULT
+    RESULT{"三方比对"}
+    RESULT -->|"只有一边修改"| AUTO["自动采用修改"]
+    RESULT -->|"两边都修改"| CONFLICT["标记为冲突"]
+    RESULT -->|"都没修改"| UNCHANGED["保持原样"]
+</pre>
+        <p class="mermaid-caption">图：三方合并的决策树 — 以共同祖先 (merge-base) 为裁判</p>
+
+        <p><strong>Merge-base 的计算</strong>：Git 使用 <code>git merge-base</code> 找到两个分支的<strong>最佳共同祖先</strong> (Best Common Ancestor)。
+        在有多个共同祖先时（交叉合并场景），recursive 策略会先合并共同祖先，再将结果作为虚拟 base。</p>
+
+        <h3 id="s5b">5.2 冲突标记解读</h3>
+        <pre><code><span class="op">&lt;&lt;&lt;&lt;&lt;&lt;&lt;</span> HEAD                  <span class="cm"># 当前分支 (ours) 的内容开始</span>
+function greet(name) {
+  console.log(<span class="str">"Hello, "</span> <span class="op">+</span> name);
+}
+<span class="op">=======</span>                        <span class="cm"># ours / theirs 分隔符</span>
+function greet(name, lang) {
+  console.log(<span class="str">`Hello, ${name}`</span>);
+}
+<span class="op">&gt;&gt;&gt;&gt;&gt;&gt;&gt;</span> feature/i18n        <span class="cm"># 合并分支 (theirs) 的内容结束</span></code></pre>
+
+        <div class="callout callout-warning">
+          <div class="callout-title">⚠️ 常见误区</div>
+          <p><strong>误区</strong>：<code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> 标注的是 "修改前"，<code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code> 是 "修改后"</p>
+          <p><strong>实际</strong>：<code>HEAD</code> → 你当前分支的内容；<code>feature/i18n</code> → 你正在合并的分支的内容。<strong>与时间先后无关</strong>，只取决于你的当前 checkout 和合并方向。</p>
+        </div>
+
+        <h3 id="s5c">5.3 Rerere — 重用已解决的冲突</h3>
+        <p>
+          <code>git rerere</code> (Reuse Recorded Resolution) 是 Git 中最被低估的功能之一。
+          它记录你如何解决一个冲突，并在下次遇到<strong>相同冲突</strong>时自动应用之前的解决方案。
+        </p>
+
+        <pre><code><span class="cm"># 启用 rerere</span>
+git config <span class="op">--</span>global rerere.enabled <span class="kw">true</span>
+
+<span class="cm"># 工作流程：</span>
+<span class="cm"># 1. 合并产生冲突 → 手动解决 → git add → git commit</span>
+<span class="cm">#    Git 自动在 .git/rr-cache/ 中记录此次解决方案</span>
+<span class="cm"># 2. 下次遇到相同冲突时：</span>
+<span class="cm">#    git merge feature/x  →  Git 自动应用之前的解决方案</span></code></pre>
+
+        <pre class="mermaid">
+sequenceDiagram
+    participant U as 开发者
+    participant G as Git
+    participant C as rr-cache/
+
+    U->>G: git merge feature/a
+    G->>G: 检测冲突
+    G->>C: 查询是否有已记录解决方案
+    C-->>G: 无记录
+    G->>U: 标记冲突（<<<<<<< ... >>>>>>>）
+    U->>G: 手动解决 → git add → git commit
+    G->>C: 记录 preimage + postimage
+    Note over C: 冲突解决模式已保存
+
+    U->>G: git merge feature/b (相同冲突)
+    G->>C: 查询命中
+    C-->>G: 返回已记录的解决方案
+    G->>U: 自动应用解决方案，无人工干预
+</pre>
+        <p class="mermaid-caption">图：Rerere 在一个长生命周期分支反复合并时的价值</p>
+
+        <h3 id="s5d">5.4 Merge Strategy 对比</h3>
+
+        <table>
+          <tr><th>策略</th><th>算法</th><th>适用场景</th><th>冲突处理</th></tr>
+          <tr>
+            <td><code>ort</code> (默认)</td>
+            <td>Ostensibly Recursive's Twin<br/>递归三方合并的现代重写</td>
+            <td>所有普通合并</td>
+            <td>逐文件三方比对，支持 rename 检测</td>
+          </tr>
+          <tr>
+            <td><code>recursive</code></td>
+            <td>经典递归三方合并</td>
+            <td>多共同祖先的交叉合并</td>
+            <td>先 merge 共同祖先 → 以结果作为虚拟 base</td>
+          </tr>
+          <tr>
+            <td><code>octopus</code></td>
+            <td>多路合并</td>
+            <td>将多个分支一次性合并</td>
+            <td>拒绝任何冲突 — 只要有一处冲突就失败</td>
+          </tr>
+          <tr>
+            <td><code>ours</code></td>
+            <td>忽略 theirs 的变更</td>
+            <td>记录合并但丢弃对方内容</td>
+            <td>完全不冲突 — 直接忽略对方</td>
+          </tr>
+          <tr>
+            <td><code>subtree</code></td>
+            <td>子树感知合并</td>
+            <td>A 是 B 的子目录的仓库</td>
+            <td>调整路径前缀后再执行 recursive</td>
+          </tr>
+        </table>
+      </section>
+
+      <!-- ====== Section 6: 算法与数据结构 ====== -->
+      <section id="s6">
+        <h2>6. 算法与数据结构深度剖析</h2>
+
+        <h3 id="s6a">6.1 提交历史 — 有向无环图 (DAG)</h3>
+        <p>
+          Git 的提交历史是一个 <strong>DAG</strong>：每个 commit 是一或多个 parent commit 的子节点，
+          由于 SHA-1 的不可逆性和不可变性，图中不可能出现循环。
+        </p>
+
+        <pre class="mermaid">
+flowchart TD
+    C1["C1 (root)"] --> C2["C2"]
+    C2 --> C3["C3 (merge)"]
+    C2 --> C4["C4"]
+    C4 --> C3
+    C3 --> C5["C5 (HEAD)"]
+    C3 --> C6["C6 (feature)"]
+    C5 --> C7["C7"]
+    C6 --> C7
+</pre>
+        <p class="mermaid-caption">图：Git 的提交图是 DAG — C7 是一个 merge commit，有两个 parent</p>
+
+        <p><strong>关键操作复杂度：</strong></p>
+        <table>
+          <tr><th>操作</th><th>复杂度</th><th>说明</th></tr>
+          <tr><td>新增 commit</td><td>O(1)</td><td>只创建新节点并更新 HEAD 引用</td></tr>
+          <tr><td>切换分支</td><td>O(n)</td><td>n = 工作区文件数，需更新 index + 文件系统</td></tr>
+          <tr><td>git log</td><td>O(k)</td><td>k = 遍历的 commit 数，沿 parent 链遍历</td></tr>
+          <tr><td>merge-base</td><td>O(N)</td><td>N = 历史深度，BFS/双向 BFS 找到最佳共同祖先</td></tr>
+          <tr><td>git blame</td><td>O(N)</td><td>N = 文件的历史 commit 数</td></tr>
+        </table>
+
+        <h3 id="s6b">6.2 Diff 算法 — Myers 差分算法</h3>
+        <p>
+          Git 使用 <strong>Myers Diff Algorithm</strong> 计算两个文本之间的最小编辑距离 (edit script)，
+          生成人类可读的 diff 输出。这是 Git 显示变更的基础。
+        </p>
+
+        <pre class="mermaid">
+flowchart TD
+    SRC["文件 A\n(旧版本)"] --> EDIT["Myers 最短编辑脚本\n(Shortest Edit Script)"]
+    DST["文件 B\n(新版本)"] --> EDIT
+    EDIT --> DIFF["统一 diff 格式输出\n- 删除行 (红色)\n+ 新增行 (绿色)"]
+</pre>
+        <p class="mermaid-caption">图：Diff 算法输入 → 编辑脚本 → 输出</p>
+
+        <p><strong>Myers 算法核心思想：</strong></p>
+        <ol>
+          <li>将两个文本的比对问题建模为一张 <strong>编辑图 (edit graph)</strong>：横轴走旧文本，纵轴走新文本</li>
+          <li>对角线移动 = 匹配字符（免费），水平/垂直移动 = 删除/插入（代价为 1）</li>
+          <li>BFS 遍历编辑图，找到从 (0,0) 到 (M,N) 的最短路径</li>
+          <li>时间复杂度 O((M+N)·D)，其中 D = 编辑距离；空间复杂度 O((M+N)·D)</li>
+        </ol>
+
+        <div class="callout callout-insight">
+          <div class="callout-title">🧠 如果让你来实现...</div>
+          <p><strong>问题</strong>：如何找到两个文件的差异？</p>
+          <p><strong>直觉方案</strong>：逐行比对，用 LCS (最长公共子序列) DP 算法</p>
+          <p><strong>Git 的实际做法</strong>：Myers 差分算法 — 编辑图上的 BFS 最短路径搜索</p>
+          <p><strong>差异分析</strong>：LCS DP 在所有情况下都是 O(N²) 时空复杂度，但实际 diff 场景中两个文件通常很相似（D ≪ N）。
+          Myers 算法利用了这一特性，复杂度与差异大小成正比，在代码 diff 场景下远优于 LCS DP</p>
+        </div>
+
+        <h3 id="s6c">6.3 Delta 压缩 — XDelta 差异链</h3>
+        <p>
+          Git 在 packfile 中使用 <strong>delta 压缩</strong> 来减少存储：一个对象可以表示为 "以另一个对象为基础，加上这个 patch"。
+          Git 使用 XDelta 格式存储差异链，同时通过<strong>启发式算法</strong>选择 delta base。
+        </p>
+
+        <pre><code><span class="cm"># Delta 对象结构（简化）</span>
+source_object_sha1           <span class="cm"># 基准对象的 SHA-1</span>
+target_object_size           <span class="cm"># 解压后的大小</span>
+delta_instructions:          <span class="cm"># 增量指令序列</span>
+  COPY  offset=<span class="num">0</span>   len=<span class="num">50</span>  <span class="cm"># 从 base 复制 50 字节</span>
+  INSERT data=<span class="str">"new content"</span>  <span class="cm"># 插入新内容</span>
+  COPY  offset=<span class="num">60</span>  len=<span class="num">200</span> <span class="cm"># 从 base 跳过 10 字节后复制 200 字节</span></code></pre>
+
+        <p><strong>Delta base 选择启发式（按优先级）：</strong></p>
+        <ol>
+          <li>同名文件的历史版本（最优先）</li>
+          <li>同目录下的其他文件</li>
+          <li>文件大小相近的 blob</li>
+          <li>最新版本优先作为 base（最近被访问概率最高）</li>
+        </ol>
+
+        <h3 id="s6d">6.4 垃圾回收 (git gc)</h3>
+        <p>
+          <code>git gc</code> 负责清理不可达对象、打包 loose object、压缩 packfile。
+          其核心流程：
+        </p>
+
+        <ol class="flow-steps">
+          <li><strong>可达性分析</strong>：从所有引用（分支、标签、HEAD、reflog）出发，标记所有可达对象</li>
+          <li><strong>打包 loose object</strong>：将松散对象打包为 packfile，应用 delta 压缩</li>
+          <li><strong>清理不可达对象</strong>：不可达且超过保护期（默认 2 周）的对象被删除</li>
+          <li><strong>合并 packfile</strong>：将多个小 packfile 合并为一个大 packfile（默认目标：单个 pack）</li>
+          <li><strong>清理 reflog 过期条目</strong>：超过 90 天的 reflog 记录被移除</li>
+        </ol>
+
+        <div class="callout callout-danger">
+          <div class="callout-title">🛑 注意</div>
+          <p><code>git gc --prune=now</code> 会<strong>立即</strong>删除所有不可达对象，恢复期为零。
+          这在你确认不需要恢复任何数据时才使用。日常使用 <code>git gc --auto</code>（提交后自动触发）是更安全的选择。</p>
+        </div>
+      </section>
+
+      <!-- ====== Section 7: 同类工具对比 ====== -->
+      <section id="s7">
+        <h2>7. 同类工具对比</h2>
+
+        <table>
+          <tr>
+            <th>特性</th><th>Git</th><th>SVN</th><th>Mercurial</th><th>Perforce</th>
+          </tr>
+          <tr>
+            <td>模型</td>
+            <td>分布式 (快照)</td>
+            <td>集中式 (增量)</td>
+            <td>分布式 (快照)</td>
+            <td>集中式 (增量)</td>
+          </tr>
+          <tr>
+            <td>数据模型</td>
+            <td>内容寻址 DAG</td>
+            <td>文件级版本号</td>
+            <td>revlog + manifest</td>
+            <td>文件级 depot</td>
+          </tr>
+          <tr>
+            <td>分支</td>
+            <td>轻量引用 (41 字节)</td>
+            <td>目录复制 (昂贵)</td>
+            <td>轻量引用</td>
+            <td>流 / 分支映射</td>
+          </tr>
+          <tr>
+            <td>合并</td>
+            <td>三方合并 + ort/recursive</td>
+            <td>sync-merge (易冲突)</td>
+            <td>三方合并</td>
+            <td>三方合并</td>
+          </tr>
+          <tr>
+            <td>数据完整性</td>
+            <td>SHA-1 / SHA-256</td>
+            <td>无内置校验</td>
+            <td>SHA-1</td>
+            <td>无内置校验</td>
+          </tr>
+          <tr>
+            <td>离线操作</td>
+            <td>完整支持</td>
+            <td>有限</td>
+            <td>完整支持</td>
+            <td>有限</td>
+          </tr>
+          <tr>
+            <td>学习曲线</td>
+            <td>高</td>
+            <td>低-中</td>
+            <td>中</td>
+            <td>中-高</td>
+          </tr>
+        </table>
+
+        <div class="callout callout-info">
+          <div class="callout-title">💡 Git vs Mercurial</div>
+          <p>Git 和 Mercurial 都是分布式 VCS，数据模型相似。Git 胜在更高的灵活性（index 设计、更丰富的操作原语）、更大的生态（GitHub）。
+          Mercurial 胜在更一致的用户界面和内建的扩展机制。但 Git 的 "底层 plumbing + 上层 porcelain" 双层设计使其更适合脚本化和自动化。</p>
+        </div>
+      </section>
+
+      <!-- ====== Section 8: 架构设计 ====== -->
+      <section id="s8">
+        <h2>8. 架构设计深度剖析</h2>
+
+        <h3>8.1 Plumbing vs Porcelain 双层架构</h3>
+        <p>
+          Git 被刻意设计为<strong>两层</strong>：底层 <strong>plumbing</strong>（管道）提供原子操作原语；
+          上层 <strong>porcelain</strong>（瓷器）提供用户友好的高级命令。这使得 Git 可以像 UNIX 管道一样组合。
+        </p>
+
+        <table>
+          <tr><th>层级</th><th>目标用户</th><th>示例命令</th></tr>
+          <tr><td><strong>Porcelain</strong> (瓷器)</td><td>日常开发者</td><td><code>git commit</code>, <code>git merge</code>, <code>git rebase</code></td></tr>
+          <tr><td><strong>Plumbing</strong> (管道)</td><td>脚本 / 工具开发者</td><td><code>git hash-object</code>, <code>git cat-file</code>, <code>git update-index</code></td></tr>
+        </table>
+
+        <div class="callout callout-insight">
+          <div class="callout-title">🧠 如果让你来实现...</div>
+          <p><strong>问题</strong>：如何设计版本控制系统的命令体系？</p>
+          <p><strong>直觉方案</strong>：为每个用户场景提供一个命令（checkout, commit, merge），内部实现对用户不可见</p>
+          <p><strong>Git 的实际做法</strong>：将底层原语暴露为 plumbing 命令，porcelain 命令是它们的组合。用户可以用 plumbing 构建自定义工作流</p>
+          <p><strong>差异分析</strong>：直觉方案导致 "要么用我的 GUI/CLI，要么重新造轮子"。
+          Git 的方案让 GitHub、GitLab、IDE 插件等可以基于 plumbing 构建上层工具，而不用碰 Git 内部 C 代码。
+          这是 Git 生态如此庞大的核心原因</p>
+        </div>
+
+        <h3>8.2 设计模式</h3>
+        <ul>
+          <li><strong>内容寻址存储 (Content-Addressable Storage)</strong>：对象由内容哈希寻址，天然去重 + 完整性校验</li>
+          <li><strong>不可变数据结构 (Immutable Data)</strong>：所有对象创建后不可修改，"修改" = 创建新对象</li>
+          <li><strong>写时复制 (Copy-on-Write)</strong>：分支 / commit 共享不变的 tree/blob，只需存储差异</li>
+          <li><strong>引用透明</strong>：SHA-1 引用完全透明，任何仓库可以通过 SHA-1 交换对象</li>
+        </ul>
+
+        <h3>8.3 关键常量与默认配置</h3>
+        <table>
+          <tr><th>配置项</th><th>默认值</th><th>设计意图</th></tr>
+          <tr><td><code>gc.auto</code></td><td>6700 loose objects</td><td>超过此数量自动触发 gc</td></tr>
+          <tr><td><code>gc.pruneExpire</code></td><td>2 weeks ago</td><td>给用户两周时间恢复误操作</td></tr>
+          <tr><td><code>gc.reflogExpire</code></td><td>90 days</td><td>三个月内的误操作可恢复</td></tr>
+          <tr><td><code>core.packedGitLimit</code></td><td>无限制</td><td>单个 packfile 的目标大小</td></tr>
+          <tr><td><code>diff.algorithm</code></td><td>myers</td><td>可切换为 histogram / patience</td></tr>
+          <tr><td><code>merge.renameLimit</code></td><td>1000</td><td>合并时检测重命名的文件数上限</td></tr>
+        </table>
+      </section>
+
+      <!-- ====== Section 9: 历史演进 ====== -->
+      <section id="s9">
+        <h2>9. 历史演进 &amp; 关键决策</h2>
+
+        <table>
+          <tr><th>版本</th><th>决策</th><th>为什么</th></tr>
+          <tr>
+            <td>v0.99 (2005)</td>
+            <td>选择 SHA-1 作为哈希算法</td>
+            <td>SHA-1 在当时是最广泛使用的安全哈希，Git 对碰撞的容忍度较高（内容寻址而非安全签名）</td>
+          </tr>
+          <tr>
+            <td>v1.5.0 (2007)</td>
+            <td>引入 <code>git add -p</code> 交互式暂存</td>
+            <td>Index 设计使得逐块暂存成为可能，这是 SVN 等增量模型无法优雅实现的特性</td>
+          </tr>
+          <tr>
+            <td>v1.7.12 (2012)</td>
+            <td>引入 <code>rerere</code> 自动冲突解决</td>
+            <td>内核开发中长生命周期分支反复合并的痛点：相同冲突不应让人重复解决</td>
+          </tr>
+          <tr>
+            <td>v2.19 (2018)</td>
+            <td>引入 <code>range-diff</code></td>
+            <td>解决 rebase 后难以对比 "修改了什么" 的问题 — 对比两个 commit 范围的差异</td>
+          </tr>
+          <tr>
+            <td>v2.34 (2021)</td>
+            <td><code>ort</code> 替代 <code>recursive</code> 作为默认合并策略</td>
+            <td>ort 是 recursive 的完整重写，性能提升显著（特别是 rename 检测），且代码更可维护（~3000 行 vs ~5000 行）</td>
+          </tr>
+          <tr>
+            <td>v2.45 (2024)</td>
+            <td>SHA-256 兼容性基础设施</td>
+            <td>应对 SHA-1 碰撞攻击（如 SHAttered），Git 逐步迁移到 SHA-256，同时保持与 SHA-1 仓库的互操作性</td>
+          </tr>
+        </table>
+      </section>
+
+      <!-- ====== Section 10: 学习要点总结 ====== -->
+      <section id="s10">
+        <h2>10. 学习要点总结</h2>
+
+        <h3>核心概念记忆清单</h3>
+        <ol>
+          <li><strong>Git 本质是内容寻址文件系统</strong>：SHA-1 → Object → Content，版本控制是上层语义</li>
+          <li><strong>四种对象</strong>：Blob (内容) → Tree (目录) → Commit (快照) → Tag (标签)，层层嵌套</li>
+          <li><strong>引用只是指针</strong>：分支 = 41 字节的文件，HEAD = "ref: refs/heads/xxx"</li>
+          <li><strong>Index 是完整快照</strong>：不是 diff，是你下次 commit 将要创建的那个 tree</li>
+          <li><strong>三方合并是冲突解决的基础</strong>：BASE + OURS + THEIRS → 自动/冲突/不变</li>
+          <li><strong>Rebase = 重写历史</strong>：不改变内容，只改变 parent 链，切勿 rebase 已推送的提交</li>
+          <li><strong>Myers 算法利用 D ≪ N 特性</strong>：在代码 diff 场景大幅优于 LCS DP</li>
+          <li><strong>Plumbing 设计是生态基石</strong>：GitHub/GitLab/IDE 插件基于 plumbing 而非内部 API</li>
+          <li><strong>Reflog 是后悔药</strong>：90 天内的误操作几乎都能恢复</li>
+          <li><strong>Packfile + Delta 压缩</strong>：同名文件、大小相近、最新优先 —— 这是 Git 存储高效的核心</li>
+        </ol>
+
+        <h3>进一步学习路径建议</h3>
+        <ol class="reading-path">
+          <li>
+            <span class="step-num">1</span>
+            <span class="step-file">Pro Git 第 10 章</span>
+            <span class="step-desc">Git Internals — 官方深度文档，必读</span>
+          </li>
+          <li>
+            <span class="step-num">2</span>
+            <span class="step-file">git-scm.com/docs</span>
+            <span class="step-desc">Plumbing 命令手册 — 理解每个底层命令</span>
+          </li>
+          <li>
+            <span class="step-num">3</span>
+            <span class="step-file">源码: git/git (GitHub)</span>
+            <span class="step-desc">object.c, commit.c, merge-ort.c — 核心实现</span>
+          </li>
+          <li>
+            <span class="step-num">4</span>
+            <span class="step-file">源码: xdiff/xdiffi.c</span>
+            <span class="step-desc">Myers Diff 算法的 Git 实现</span>
+          </li>
+          <li>
+            <span class="step-num">5</span>
+            <span class="step-file">源码: builtin/merge.c</span>
+            <span class="step-desc">merge 策略的调度与协调逻辑</span>
+          </li>
+        </ol>
+
+        <div class="callout callout-tip">
+          <div class="callout-title">📖 推荐阅读</div>
+          <ul style="margin-bottom:0;">
+            <li><a href="https://git-scm.com/book/en/v2/Git-Internals-Plumbing-and-Porcelain" target="_blank">Pro Git — Git Internals</a>：官方权威文档</li>
+            <li><a href="https://github.com/git/git" target="_blank">git/git 源码仓库</a>：Git 自身的 C 源码</li>
+            <li>Linus Torvalds 在 Google 的 Tech Talk (2007)：Git 设计哲学的一手讲解</li>
+          </ul>
+        </div>
+
+        <p class="text-muted text-sm" style="margin-top:40px;">
+          ⚠️ 注意：本文档基于 Git 公开文档和公认的内部原理编写。由于工作区中无 Git C 源码，未标注精确源码文件和行号引用。
+          所有代码示例为演示 Git 内部格式的简化版本。SHA-1 示例哈希值均为虚构。
+        </p>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Mobile sidebar toggle -->
+  <script>
+    (function () {
+      if (window.innerWidth > 1024) return;
+      const btn = document.createElement('button');
+      btn.textContent = '☰ 目录';
+      btn.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:200;padding:10px 16px;border-radius:24px;border:none;background:var(--color-primary);color:#fff;font-size:14px;font-weight:600;cursor:pointer;box-shadow:var(--shadow-lg);';
+      btn.onclick = function () {
+        document.getElementById('sidebar').classList.toggle('open');
+      };
+      document.body.appendChild(btn);
+    })();
+  </script>
+</body>
+
+</html>

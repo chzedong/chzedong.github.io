@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>解构 Jotai — 原子化状态管理库</title>
+<style>
+:root {
+  --color-bg: #ffffff;
+  --color-bg-secondary: #f8f9fa;
+  --color-bg-tertiary: #f1f3f5;
+  --color-text: #1a1a2e;
+  --color-text-secondary: #495057;
+  --color-text-muted: #868e96;
+  --color-border: #dee2e6;
+  --color-border-light: #e9ecef;
+  --color-primary: #2563eb;
+  --color-primary-light: #eff6ff;
+  --color-accent: #7c3aed;
+  --color-accent-light: #f5f3ff;
+  --color-success: #059669;
+  --color-success-bg: #ecfdf5;
+  --color-warning: #d97706;
+  --color-warning-bg: #fffbeb;
+  --color-danger: #dc2626;
+  --color-danger-bg: #fef2f2;
+  --color-info: #0891b2;
+  --color-info-bg: #ecfeff;
+  --color-code-bg: #f1f5f9;
+  --color-code-text: #1e293b;
+  --color-inline-code-bg: #f1f5f9;
+  --color-inline-code-text: #e11d48;
+  --sidebar-width: 260px;
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "SF Mono", "Fira Code", "Consolas", monospace;
+  --radius: 8px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #0f172a;
+    --color-bg-secondary: #1e293b;
+    --color-bg-tertiary: #334155;
+    --color-text: #e2e8f0;
+    --color-text-secondary: #94a3b8;
+    --color-text-muted: #64748b;
+    --color-border: #334155;
+    --color-border-light: #1e293b;
+    --color-primary: #3b82f6;
+    --color-primary-light: #1e3a5f;
+    --color-accent: #8b5cf6;
+    --color-accent-light: #2e1065;
+    --color-success-bg: #064e3b;
+    --color-warning-bg: #451a03;
+    --color-danger-bg: #450a0a;
+    --color-info-bg: #083344;
+    --color-code-bg: #1e293b;
+    --color-code-text: #e2e8f0;
+    --color-inline-code-bg: #334155;
+    --color-inline-code-text: #f87171;
+  }
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:20px}
+body{font-family:var(--font-sans);font-size:15px;line-height:1.7;color:var(--color-text);background:var(--color-bg)}
+.layout{display:flex;min-height:100vh}
+.sidebar{position:fixed;top:0;left:0;width:var(--sidebar-width);height:100vh;background:var(--color-bg-secondary);border-right:1px solid var(--color-border);overflow-y:auto;padding:24px 20px;z-index:100}
+.sidebar-header{font-size:13px;font-weight:600;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--color-border)}
+.sidebar-title{font-size:16px;font-weight:700;color:var(--color-text);margin-bottom:20px}
+.sidebar-nav{list-style:none}
+.sidebar-nav li{margin-bottom:2px}
+.sidebar-nav a{display:block;padding:6px 12px;border-radius:6px;color:var(--color-text-secondary);text-decoration:none;font-size:14px;transition:all 150ms}
+.sidebar-nav a:hover{background:var(--color-bg-tertiary);color:var(--color-text)}
+.main{margin-left:var(--sidebar-width);flex:1;max-width:860px;padding:48px 56px 80px}
+.page-header{margin-bottom:40px;padding-bottom:32px;border-bottom:1px solid var(--color-border)}
+.page-header h1{font-size:32px;font-weight:800;margin-bottom:12px}
+.page-header .subtitle{font-size:17px;color:var(--color-text-secondary)}
+.badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:500;background:var(--color-bg-tertiary);color:var(--color-text-secondary)}
+section{margin-bottom:48px}
+section h2{font-size:24px;font-weight:700;margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid var(--color-border-light)}
+section h3{font-size:19px;font-weight:600;margin-top:28px;margin-bottom:12px}
+section p,section li{color:var(--color-text-secondary);margin-bottom:10px}
+section ul,section ol{padding-left:24px;margin-bottom:14px}
+pre{font-family:var(--font-mono);font-size:13px;line-height:1.5;background:var(--color-code-bg);color:var(--color-code-text);padding:16px 20px;border-radius:var(--radius);overflow-x:auto;margin:16px 0}
+code{font-family:var(--font-mono);font-size:13px}
+:not(pre)>code{background:var(--color-inline-code-bg);color:var(--color-inline-code-text);padding:2px 6px;border-radius:3px}
+.callout{padding:16px 20px;border-radius:var(--radius);border-left:4px solid;margin:20px 0}
+.callout-title{font-weight:600;margin-bottom:4px}
+.callout-info{background:var(--color-info-bg);border-color:var(--color-info)}
+.callout-tip{background:var(--color-success-bg);border-color:var(--color-success)}
+.callout-warning{background:var(--color-warning-bg);border-color:var(--color-warning)}
+.callout-insight{background:var(--color-accent-light);border-color:var(--color-accent)}
+table{width:100%;border-collapse:collapse;margin:16px 0}
+th,td{border:1px solid var(--color-border);padding:10px 14px;text-align:left;font-size:14px}
+th{background:var(--color-bg-secondary);font-weight:600;color:var(--color-text)}
+td{color:var(--color-text-secondary)}
+.code-ref{border:1px solid var(--color-border);border-radius:var(--radius);overflow:hidden;margin:16px 0}
+.code-ref__header{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:var(--color-bg-secondary);border-bottom:1px solid var(--color-border)}
+.code-ref__path{font-family:var(--font-mono);font-size:12px;color:var(--color-text-muted)}
+.code-ref__link{color:var(--color-primary);text-decoration:none;font-size:12px}
+.code-ref__notes{padding:10px 16px;background:var(--color-info-bg);font-size:13px;color:var(--color-text-secondary)}
+.flow-steps{counter-reset:step;list-style:none;padding:0}
+.flow-steps li{counter-increment:step;position:relative;padding-left:40px;margin-bottom:16px;padding-bottom:16px;border-left:2px solid var(--color-border)}
+.flow-steps li:last-child{border-left-color:transparent}
+.flow-steps li::before{content:counter(step);position:absolute;left:-14px;top:0;width:26px;height:26px;border-radius:50%;background:var(--color-primary);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.text-muted{color:var(--color-text-muted);font-size:13px}
+.highlight{background:linear-gradient(120deg,var(--color-warning-bg),var(--color-warning-bg));padding:2px 4px;border-radius:2px}
+@media(max-width:1024px){.sidebar{transform:translateX(-100%)}.main{margin-left:0;padding:32px 24px}}
+@media(max-width:640px){.page-header h1{font-size:24px}section h2{font-size:20px}}
+@media print{.sidebar{display:none}.main{margin-left:0;padding:0;max-width:100%}}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'default'});</script>
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">开源库解构</div>
+  <div class="sidebar-title"><a href="#">Jotai</a></div>
+  <ul class="sidebar-nav">
+    <li><a href="#s1">1. 项目背景</a></li>
+    <li><a href="#s2">2. 工程化方案</a></li>
+    <li><a href="#s3">3. 项目制品</a></li>
+    <li><a href="#s4">4. 项目结构</a></li>
+    <li><a href="#s5">5. 核心链路</a></li>
+    <li><a href="#s6">6. 架构设计</a></li>
+    <li><a href="#s7">7. 同类库对比</a></li>
+    <li><a href="#s8">8. 学习要点总结</a></li>
+  </ul>
+</aside>
+<main class="main">
+<header class="page-header">
+  <h1>解构 Jotai — 原子化状态管理</h1>
+  <p class="subtitle">Primitive and flexible state management for React · v2.20.0</p>
+  <div class="badges">
+    <span class="badge">TypeScript</span>
+    <span class="badge">MIT</span>
+    <span class="badge">作者: Daishi Kato</span>
+  </div>
+  <p style="margin-top:16px"><a href="https://github.com/pmndrs/jotai" style="color:var(--color-primary)">github.com/pmndrs/jotai</a></p>
+</header>
+
+<section id="s1"><h2>1. 项目背景</h2>
+<h3>解决了什么问题</h3>
+<p>React 内置的 <code>useState</code>/<code>useContext</code> 在小规模足够用，但两个痛点无法回避：</p>
+<ul>
+<li><strong>Context 的渲染范围问题</strong>：单个 Context 值变化时，所有消费者重渲染，无法"按需订阅某个字段"</li>
+<li><strong>派生状态的缓存问题</strong>：<code>useMemo</code> 手动派生，依赖数组易遗漏</li>
+</ul>
+<p>Jotai 的解法：把状态拆成<strong>原子（atom）</strong>——每个 atom 是最小共享单元，依赖自动追踪，只有<strong>直接消费该 atom 的组件</strong>会重渲染。</p>
+
+<div class="callout callout-insight">
+<div class="callout-title">🧠 如果让你来实现...</div>
+<p><strong>问题</strong>：如何实现"按需订阅原子状态"？</p>
+<p><strong>直觉方案</strong>：Context + useMemo 精细化控制。缺点：Context 绑定到组件树层级。</p>
+<p><strong>Jotai 的做法</strong>：绕过 Context。每个 atom 在 Store 中独立注册，<code>store.sub(atom, cb)</code> 订阅<strong>单个 atom</strong>，组件只在自己关心的 atom 变化时重渲染。</p>
+<p><strong>差异分析</strong>：把"订阅"从 React 渲染树剥离到 Store 层，消除了层级依赖。</p>
+</div>
+
+<h3>核心特性</h3>
+<ul>
+<li><strong>零样板</strong>：<code>const countAtom = atom(0)</code>，无需 Provider</li>
+<li><strong>派生 Atom</strong>：<code>atom(get => get(countAtom) * 2)</code>，自动追踪</li>
+<li><strong>异步</strong>：reader 可返回 Promise，配合 React Suspense</li>
+<li><strong>可写派生</strong>：<code>atom(read, write)</code> 双向</li>
+<li><strong>按需渲染</strong>：只订阅用到的 atom</li>
+</ul>
+</section>
+
+<section id="s2"><h2>2. 工程化方案</h2>
+<table>
+<tr><th>维度</th><th>方案</th></tr>
+<tr><td>语言</td><td>TypeScript 6.0</td></tr>
+<tr><td>构建</td><td>Rollup（base / vanilla / react 三类产物）</td></tr>
+<tr><td>包管理</td><td>pnpm（单包结构）</td></tr>
+<tr><td>测试</td><td>Vitest + testing-library</td></tr>
+<tr><td>Lint/Format</td><td>ESLint 9 + Prettier</td></tr>
+</table>
+<div class="callout callout-tip">
+<div class="callout-title">💡 可借鉴</div>
+<p>Rollup 配置拆成多个入口，每个产出一套 ESM/CJS，<code>shelljs</code> patch <code>.d.ts</code> 消除模块名引用——纯 Rollup 替代 tsc 的可行方案。</p>
+</div>
+</section>
+
+<section id="s3"><h2>3. 项目结构</h2>
+<pre><code>src/
+├── vanilla/          ← 核心（无 React 依赖）
+│   ├── atom.ts       ← atom() 工厂 + 类型
+│   ├── store.ts      ← Store（订阅/读写/依赖追踪）
+│   ├── typeUtils.ts  ← Extract 工具类型
+│   └── internals.ts  ← 内部 building blocks
+├── react/            ← React 绑定
+│   ├── useAtomValue.ts  ← 读 hook
+│   ├── useSetAtom.ts    ← 写 hook
+│   ├── useAtom.ts       ← 读写合一
+│   └── Provider.ts      ← 可选多 Store
+├── vanilla.ts        ← vanilla 入口
+├── react.ts          ← React 入口
+└── index.ts          ← 聚合入口</code></pre>
+</section>
+
+<section id="s4"><h2>4. 核心链路</h2>
+<h3>推荐阅读顺序</h3>
+<ol class="flow-steps">
+<li><strong>src/vanilla/typeUtils.ts</strong> — 类型基础，<code>ExtractAtomValue</code> 的 infer 模式</li>
+<li><strong>src/vanilla/atom.ts</strong> — <code>atom()</code> 工厂的 5 种重载</li>
+<li><strong>src/vanilla/store.ts</strong> — 仅 30 行，<code>createStore()</code> 委托给 <code>INTERNAL_buildStore()</code></li>
+<li><strong>src/vanilla/internals.ts</strong> — 38KB，Store 的真正实现。含 building blocks 系统</li>
+<li><strong>src/react/useAtomValue.ts</strong> — <code>useReducer</code> + <code>store.sub()</code> 响应式</li>
+</ol>
+
+<h3>数据流</h3>
+<pre><code>atom(0) → Store 注册 → useAtomValue(atom) → store.get(atom) + store.sub(atom, cb)
+setCount(5) → store.set(atom, 5) → 通知订阅 → useReducer rerender → 新值返回</code></pre>
+
+<h3>核心代码：atom() 工厂</h3>
+<div class="code-ref">
+<div class="code-ref__header">
+<span class="code-ref__path">src/vanilla/atom.ts:70-90</span>
+</div>
+<pre><code>let keyCount = 0  // 全局计数器
+
+export function atom(read, write) {
+  const key = `atom${++keyCount}`
+  const config = { toString() { return key } }
+
+  if (typeof read === 'function') {
+    config.read = read  // → 派生 atom
+  } else {
+    config.init = read   // → 原始值
+    config.read = defaultRead
+    config.write = defaultWrite
+  }
+  if (write) config.write = write
+  return config
+}</code></pre>
+<div class="code-ref__notes">
+💡 <strong>设计意图</strong>：<code>typeof read === 'function'</code> 一个 if 区分"原始"和"派生"，不需要类继承。全局 <code>keyCount</code> 保证唯一 ID。
+</div>
+</div>
+
+<h3>核心代码：useAtomValue 订阅机制</h3>
+<div class="code-ref">
+<div class="code-ref__header">
+<span class="code-ref__path">src/react/useAtomValue.ts:96-133</span>
+</div>
+<pre><code>export function useAtomValue(atom, options) {
+  const store = useStore(options)
+
+  // useReducer 做带浅比较的强制刷新
+  const [[value, ...], rerender] = useReducer(
+    (prev) => {
+      const next = store.get(atom)
+      if (Object.is(prev[0], next)) return prev  // 值没变不渲染！
+      return [next, store, atom]
+    },
+    undefined,
+    () => [store.get(atom), store, atom],
+  )
+
+  useEffect(() => {
+    const unsub = store.sub(atom, () => rerender())  // 只订阅这个 atom！
+    return unsub
+  }, [store, atom])
+
+  return value
+}</code></pre>
+<div class="code-ref__notes">
+💡 <strong>设计意图</strong>：<br>
+1) <code>useReducer</code> 而非 <code>useState</code>：一次调度中同时读值和浅比较，省掉一个 useEffect<br>
+2) <code>store.sub(atom, cb)</code> 只订阅这一个 atom——"细粒度按需渲染"的核心<br>
+3) <code>Object.is()</code> 避免相同值的无效渲染
+</div>
+</div>
+</section>
+
+<section id="s5"><h2>5. 架构设计</h2>
+<h3>设计模式</h3>
+<table>
+<tr><th>模式</th><th>位置</th><th>作用</th></tr>
+<tr><td>工厂模式</td><td><code>atom()</code></td><td>5 种重载统一创建 atom</td></tr>
+<tr><td>发布-订阅</td><td><code>store.sub()</code></td><td>状态变更通知组件</td></tr>
+<tr><td>观察者</td><td><code>onMount/onUnmount</code></td><td>atom 生命周期钩子</td></tr>
+<tr><td>策略</td><td><code>typeof read</code></td><td>运行时区分原始/派生路径</td></tr>
+</table>
+
+<div class="callout callout-insight">
+<div class="callout-title">🧠 如果让你来实现依赖追踪...</div>
+<p><strong>直觉方案</strong>：手动声明依赖数组 <code>atom([a,b], (a,b) => a+b)</code></p>
+<p><strong>Jotai 的做法</strong>：<code>atom(get => get(countAtom) * 2)</code>，<code>get()</code> 运行时记录被访问的 atom，自动建依赖图</p>
+<p><strong>差异分析</strong>：直觉方案更显式但冗余——依赖声明和实际使用剥离易不同步。Jotai 的"读即依赖"让代码即文档。</p>
+</div>
+
+<h3>异步 Promise 处理</h3>
+<p>atom reader 返回 Promise 时：</p>
+<ol>
+<li>给 Promise 打 <code>status/value/reason</code> 标记</li>
+<li>React 19 <code>use(promise)</code> 抛 Promise 触发 Suspense</li>
+<li><code>createContinuablePromise</code> 处理值变化时的重算</li>
+</ol>
+
+<h3>Store 内部架构：Building Blocks 系统</h3>
+<p><code>internals.ts</code>（38KB）是 Jotai 最复杂的文件。核心设计是 <strong>Building Blocks 数组</strong>——26 个槽位的函数/状态容器组成的数组。</p>
+<div class="code-ref">
+<div class="code-ref__header"><span class="code-ref__path">src/vanilla/internals.ts — buildStore() 核心</span></div>
+<pre><code>type INTERNAL_Store = {
+  get&lt;Value&gt;(atom: Atom&lt;Value&gt;): Value
+  set&lt;Value, Args&gt;(atom: WritableAtom&lt;Value, Args, Result&gt;, ...args: Args): Result
+  sub(atom: AnyAtom, listener: () =&gt; void): () =&gt; void
+}
+
+function buildStore(...partialBuildingBlocks) {
+  const store = { get, set, sub }
+  const buildingBlocks = [
+    new WeakMap(),   // [0] atomStateMap
+    new WeakMap(),   // [1] mountedMap
+    new WeakMap(),   // [2] invalidatedAtoms
+    new Set(),       // [3] changedAtoms
+    new Set(),       // [4] mountCallbacks
+    new Set(),       // [5] unmountCallbacks
+    {},              // [6] storeHooks
+    BUILDING_BLOCK_atomRead,            // [7]
+    BUILDING_BLOCK_atomWrite,           // [8]
+    BUILDING_BLOCK_atomOnInit,          // [9]
+    BUILDING_BLOCK_atomOnMount,         // [10]
+    ...
+    BUILDING_BLOCK_storeGet,            // [21]
+    BUILDING_BLOCK_storeSet,            // [22]
+    BUILDING_BLOCK_storeSub,            // [23]
+    ...
+    [0],             // [26] store epoch
+  ]
+  buildingBlockMap.set(store, Object.freeze(buildingBlocks))
+  return store
+}</code></pre>
+<div class="code-ref__notes">
+💡 <strong>设计意图</strong>：<br>
+1) 26 个 building blocks 按固定索引访问，不用遍历对象属性——微秒级性能优势<br>
+2) <code>partialBuildingBlocks</code> 参数让生态库（<code>jotai-*</code>）覆盖特定 building block 实现，不用继承整个 Store<br>
+3) <code>WeakMap</code> 存 atomStateMap 和 mountedMap——atom 对象被 GC 时自动清理状态
+</div>
+</div>
+
+<h3>Atom 状态追踪与无效化</h3>
+<p>每个 atom 在 Store 中的状态：</p>
+<pre><code>type AtomState&lt;Value&gt; = {
+  d: Map&lt;AnyAtom, EpochNumber&gt;  // 依赖图：atom → 对方的 epoch 号
+  pendingPromises: Set&lt;AnyAtom&gt;  // 依赖该 atom 且持有 pending Promise 的 atom
+  v: Value                       // 当前值
+}</code></pre>
+<p>派生 atom 执行 <code>read</code> 时，<code>get()</code> 会记录所有被访问的 atom 到 <code>d</code> 中——这就是自动依赖追踪的底层机制。当依赖的 atom 值变化时，它的 epoch 递增，Store 发现不一致后无效化并重新计算派生 atom。</p>
+
+<h3>单例 Store 与多实例检测</h3>
+<div class="code-ref">
+<div class="code-ref__header"><span class="code-ref__path">src/vanilla/store.ts — getDefaultStore()</span></div>
+<pre><code>let defaultStore: Store | undefined
+export function getDefaultStore(): Store {
+  if (!defaultStore) {
+    defaultStore = createStore()
+    if (import.meta.env?.MODE !== 'production') {
+      (globalThis as any).__JOTAI_DEFAULT_STORE__ ||= defaultStore
+      if ((globalThis as any).__JOTAI_DEFAULT_STORE__ !== defaultStore) {
+        console.warn('Detected multiple Jotai instances.')
+      }
+    }
+  }
+  return defaultStore
+}</code></pre>
+<div class="code-ref__notes">
+💡 <strong>设计意图</strong>：<code>globalThis.__JOTAI_DEFAULT_STORE__</code> 在非生产环境注入全局变量，检测是否有多个 Jotai 实例同时存在（常见于 monorepo / duplicate dependency），并发出警告。<code>createStore()</code> 还支持 <code>INTERNAL_overrideCreateStore</code> 覆盖，用于测试。
+</div>
+</div>
+
+<h3>代表性测试示例</h3>
+<p>Jotai 使用 <code>vitest</code>，测试目录集中在 <code>tests/</code> 下。以下是三类典型测试模式：</p>
+<table>
+<tr><th>类别</th><th>测试内容</th><th>验证点</th></tr>
+<tr><td>基础用法</td><td><code>const a = atom(0); useAtom(a)</code> → 读写一致</td><td>atom 的 get/set 正确性</td></tr>
+<tr><td>派生追踪</td><td><code>const b = atom(get => get(a) * 2)</code> 随 a 变化</td><td>自动依赖 + 惰性重算</td></tr>
+<tr><td>异步 atom</td><td><code>atom(async get => ...)</code> + Suspense</td><td>Promise 状态机 + abort</td></tr>
+</table>
+</section>
+
+<section id="s6"><h2>6. 同类库对比</h2>
+<table>
+<tr><th></th><th>Jotai</th><th>Zustand</th><th>Recoil</th><th>Redux Toolkit</th></tr>
+<tr><td>范式</td><td>原子化（自底向上）</td><td>集中 Store</td><td>原子化</td><td>Flux</td></tr>
+<tr><td>包大小</td><td>~4KB</td><td>~2KB</td><td>~80KB</td><td>~12KB</td></tr>
+<tr><td>依赖追踪</td><td>✅ 自动</td><td>✅ 选择器</td><td>✅ 自动</td><td>❌ 手动</td></tr>
+<tr><td>React 集成</td><td>原生 hook</td><td>hook + 外部</td><td>Provider 必须</td><td>Provider + hook</td></tr>
+<tr><td>异步</td><td>✅ Suspense</td><td>❌ 中间件</td><td>✅ Suspense</td><td>✅ thunk/saga</td></tr>
+</table>
+<div class="callout callout-tip">
+<div class="callout-title">💡 选型建议</div>
+<p><strong>Jotai</strong>：多组件共享细粒度状态 + 复杂派生（编辑器工具栏、表单联动）</p>
+<p><strong>Zustand</strong>：集中业务 Store（用户信息、购物车），两者可共存。</p>
+</div>
+</section>
+
+<section id="s7"><h2>7. 学习要点</h2>
+<h3>可复用的工程实践</h3>
+<ol>
+<li><strong><code>typeof read</code> 替代类继承</strong> — 少创建对象</li>
+<li><strong><code>useReducer</code> 带比较的状态刷新</strong> — 省一个渲染周期</li>
+<li><strong><code>Object.is()</code> 防无效渲染</strong> — 成本极低收益巨大</li>
+<li><strong><code>keyCount++</code> 做唯一 ID</strong> — 无需 UUID 库</li>
+</ol>
+<h3>可借鉴的架构模式</h3>
+<ol>
+<li><strong>vanilla / React 分层</strong>：核心不依赖框架</li>
+<li><strong>atom 数据定义，Store 状态容器</strong>：职责清晰</li>
+<li><strong><code>infer</code> 泛型推导</strong>：<code>ExtractAtomValue</code> 系列确保类型安全</li>
+</ol>
+<h3>进一步阅读</h3>
+<ol>
+<li><code>src/vanilla/store.ts</code> — 依赖追踪的核心逻辑</li>
+<li><code>src/vanilla/internals.ts</code> — 26 个内部 API</li>
+<li><a href="https://github.com/pmndrs/jotai/discussions">GitHub Discussions</a> — 作者设计笔记</li>
+</ol>
+</section>
+
+</main></div></body></html>
