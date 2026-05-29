@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF.js 深度解析 — 项目总览</title>
+  <style>
+    :root {
+      --color-bg: #ffffff;
+      --color-bg-secondary: #f8f9fa;
+      --color-bg-tertiary: #f1f3f5;
+      --color-text: #1a1a2e;
+      --color-text-secondary: #495057;
+      --color-text-muted: #868e96;
+      --color-border: #dee2e6;
+      --color-border-light: #e9ecef;
+      --color-primary: #2563eb;
+      --color-primary-light: #eff6ff;
+      --color-primary-dark: #1d4ed8;
+      --color-accent: #7c3aed;
+      --color-accent-light: #f5f3ff;
+      --color-success: #059669;
+      --color-success-bg: #ecfdf5;
+      --color-warning: #d97706;
+      --color-warning-bg: #fffbeb;
+      --color-danger: #dc2626;
+      --color-danger-bg: #fef2f2;
+      --color-info: #0891b2;
+      --color-info-bg: #ecfeff;
+      --color-code-bg: #f1f5f9;
+      --color-code-text: #1e293b;
+      --color-inline-code-bg: #f1f5f9;
+      --color-inline-code-text: #e11d48;
+      --sidebar-width: 260px;
+      --max-content-width: 860px;
+      --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
+      --font-mono: "SF Mono", "Fira Code", "Fira Mono", "Consolas", monospace;
+      --radius: 8px;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07);
+      --transition: 150ms ease;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --color-bg: #0f172a;
+        --color-bg-secondary: #1e293b;
+        --color-bg-tertiary: #334155;
+        --color-text: #e2e8f0;
+        --color-text-secondary: #94a3b8;
+        --color-text-muted: #64748b;
+        --color-border: #334155;
+        --color-border-light: #1e293b;
+        --color-primary: #3b82f6;
+        --color-primary-light: #1e3a5f;
+        --color-primary-dark: #60a5fa;
+        --color-accent: #8b5cf6;
+        --color-accent-light: #2e1065;
+        --color-code-bg: #1e293b;
+        --color-code-text: #e2e8f0;
+        --color-inline-code-bg: #334155;
+        --color-inline-code-text: #f87171;
+      }
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth;scroll-padding-top:20px}
+    body{font-family:var(--font-sans);font-size:15px;line-height:1.7;color:var(--color-text);background:var(--color-bg);-webkit-font-smoothing:antialiased}
+    .layout{display:flex;min-height:100vh}
+    .sidebar{position:fixed;top:0;left:0;width:var(--sidebar-width);height:100vh;background:var(--color-bg-secondary);border-right:1px solid var(--color-border);overflow-y:auto;padding:24px 20px;z-index:100}
+    .sidebar-header{font-size:13px;font-weight:600;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--color-border)}
+    .sidebar-title{font-size:16px;font-weight:700;color:var(--color-text);margin-bottom:20px;line-height:1.3}
+    .sidebar-title a{color:inherit;text-decoration:none}
+    .sidebar-nav{list-style:none}
+    .sidebar-nav li{margin-bottom:2px}
+    .sidebar-nav a{display:block;padding:6px 12px;border-radius:6px;color:var(--color-text-secondary);text-decoration:none;font-size:14px;transition:all var(--transition)}
+    .sidebar-nav a:hover{background:var(--color-bg-tertiary);color:var(--color-text)}
+    .sidebar-nav a.active{background:var(--color-primary-light);color:var(--color-primary);font-weight:600}
+    .sidebar-nav .sub-nav{padding-left:16px}
+    .sidebar-nav .sub-nav a{font-size:13px}
+    .main{margin-left:var(--sidebar-width);flex:1;max-width:var(--max-content-width);padding:48px 56px 80px}
+    .page-header{margin-bottom:40px;padding-bottom:32px;border-bottom:1px solid var(--color-border)}
+    .page-header h1{font-size:32px;font-weight:800;line-height:1.2;color:var(--color-text);margin-bottom:12px;letter-spacing:-0.02em}
+    .page-header .subtitle{font-size:17px;color:var(--color-text-secondary);line-height:1.6;margin-bottom:16px}
+    .badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+    .badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:500;background:var(--color-bg-tertiary);color:var(--color-text-secondary)}
+    .badge-primary{background:var(--color-primary-light);color:var(--color-primary)}
+    .badge-accent{background:var(--color-accent-light);color:var(--color-accent)}
+    .badge-success{background:var(--color-success-bg);color:var(--color-success)}
+    section{margin-bottom:48px}
+    section h2{font-size:24px;font-weight:700;color:var(--color-text);margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid var(--color-border-light);letter-spacing:-0.01em}
+    section h3{font-size:19px;font-weight:600;color:var(--color-text);margin-top:28px;margin-bottom:12px}
+    section h4{font-size:16px;font-weight:600;color:var(--color-text-secondary);margin-top:20px;margin-bottom:8px}
+    section p{margin-bottom:14px;color:var(--color-text-secondary)}
+    section ul,section ol{margin-bottom:14px;padding-left:24px;color:var(--color-text-secondary)}
+    section li{margin-bottom:6px}
+    section a{color:var(--color-primary);text-decoration:none}
+    section a:hover{text-decoration:underline}
+    code{font-family:var(--font-mono);font-size:13px;background:var(--color-inline-code-bg);color:var(--color-inline-code-text);padding:2px 6px;border-radius:4px}
+    pre{background:var(--color-code-bg);color:var(--color-code-text);border-radius:var(--radius);padding:20px 24px;overflow-x:auto;margin-bottom:18px;border:1px solid var(--color-border-light);font-size:13px;line-height:1.6}
+    pre code{background:none;color:inherit;padding:0;font-size:inherit}
+    .kw{color:#7c3aed;font-weight:600}
+    .str{color:#059669}
+    .num{color:#d97706}
+    .cm{color:#868e96;font-style:italic}
+    .fn{color:#2563eb}
+    @media (prefers-color-scheme: dark){.kw{color:#a78bfa}.str{color:#34d399}.num{color:#fbbf24}.cm{color:#64748b}.fn{color:#60a5fa}}
+    .callout{padding:16px 20px;border-radius:var(--radius);margin-bottom:18px;border-left:4px solid;font-size:14px}
+    .callout-title{font-weight:600;margin-bottom:4px}
+    .callout-info{background:var(--color-info-bg);border-color:var(--color-info)}
+    .callout-tip{background:var(--color-success-bg);border-color:var(--color-success)}
+    .callout-warning{background:var(--color-warning-bg);border-color:var(--color-warning)}
+    .callout-insight{background:var(--color-accent-light);border-color:var(--color-accent)}
+    .code-ref{border:1px solid var(--color-border);border-radius:var(--radius);margin-bottom:20px;overflow:hidden}
+    .code-ref__header{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:var(--color-bg-tertiary);border-bottom:1px solid var(--color-border-light);font-size:12px}
+    .code-ref__path{font-family:var(--font-mono);color:var(--color-text-muted);font-weight:500}
+    .code-ref pre{margin:0;border:none;border-radius:0}
+    table{width:100%;border-collapse:collapse;margin-bottom:18px;font-size:14px}
+    th,td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--color-border-light)}
+    th{font-weight:600;color:var(--color-text);background:var(--color-bg-secondary);font-size:13px;text-transform:uppercase;letter-spacing:0.03em}
+    td{color:var(--color-text-secondary)}
+    tr:hover td{background:var(--color-bg-secondary)}
+    .module-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-bottom:24px}
+    .module-card{padding:20px;border:1px solid var(--color-border);border-radius:var(--radius);transition:all var(--transition);text-decoration:none;display:block}
+    .module-card:hover{border-color:var(--color-primary);box-shadow:var(--shadow-md);transform:translateY(-2px)}
+    .module-card h3{font-size:17px;font-weight:700;color:var(--color-primary);margin:0 0 8px}
+    .module-card p{color:var(--color-text-secondary);font-size:14px;margin:0}
+    .module-card .module-tag{display:inline-block;margin-top:10px;font-size:11px;padding:2px 8px;border-radius:12px;background:var(--color-primary-light);color:var(--color-primary)}
+    .mermaid-caption{text-align:center;color:var(--color-text-muted);font-size:13px;margin-top:-10px;margin-bottom:20px}
+    .reading-path{list-style:none;padding:0;margin-bottom:20px}
+    .reading-path li{display:flex;align-items:baseline;gap:12px;padding:10px 14px;margin-bottom:4px;border-radius:6px;background:var(--color-bg-secondary);font-size:14px}
+    .reading-path .step-num{flex-shrink:0;width:24px;height:24px;border-radius:50%;background:var(--color-primary);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+    .reading-path .step-file{font-family:var(--font-mono);font-weight:600;color:var(--color-text);min-width:160px}
+    .reading-path .step-desc{color:var(--color-text-secondary)}
+    .page-footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--color-border);display:flex;justify-content:space-between;align-items:center}
+    .page-footer a{color:var(--color-primary);text-decoration:none;font-weight:600}
+    .page-footer a:hover{text-decoration:underline}
+    .arch-highlight{padding:20px 24px;border-radius:var(--radius);background:var(--color-accent-light);border-left:4px solid var(--color-accent);margin-bottom:20px}
+    .arch-highlight h4{margin-top:0;color:var(--color-accent)}
+  </style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-header">PDF.js 深度解析</div>
+    <div class="sidebar-title"><a href="index.html">项目总览</a></div>
+    <ul class="sidebar-nav">
+      <li><a href="#background" class="active">项目背景</a></li>
+      <li><a href="#quickstart">快速上手</a></li>
+      <li><a href="#modules">模块导航</a></li>
+      <li><a href="#engineering">工程化方案</a></li>
+      <li><a href="#architecture">架构总览</a></li>
+      <li><a href="#scale">项目规模</a></li>
+      <li><a href="#history">历史演进</a></li>
+      <li><a href="#reading-path">学习路径</a></li>
+      <li class="sub-nav">
+        <a href="module-parsing.html">📄 PDF 解析核心链路</a>
+        <a href="module-rendering.html">🎨 渲染管线与 Worker 架构</a>
+        <a href="module-fonts-streams.html">🔤 字体系统与流编解码</a>
+      </li>
+    </ul>
+  </aside>
+  <main class="main">
+    <header class="page-header">
+      <h1>PDF.js — 浏览器中的 PDF 引擎</h1>
+      <p class="subtitle">Mozilla 开发的纯 JavaScript PDF 渲染库。<br>零依赖浏览器原生 API，在 Canvas 上精确呈现 PDF 的每一像素。</p>
+      <div class="badges">
+        <span class="badge badge-primary">Apache-2.0</span>
+        <span class="badge badge-accent">JavaScript</span>
+        <span class="badge badge-success">Mozilla</span>
+        <span class="badge">v2.16.105（本地）/ v5.7.284（最新）</span>
+        <span class="badge">~123,000 行</span>
+        <span class="badge">242 源文件</span>
+      </div>
+      <p style="margin-top:16px">
+        <a href="https://github.com/mozilla/pdf.js" target="_blank" rel="noopener">GitHub → mozilla/pdf.js</a>
+        &nbsp;·&nbsp;
+        <a href="https://mozilla.github.io/pdf.js/" target="_blank" rel="noopener">在线 Demo</a>
+      </p>
+    </header>
+
+    <section id="background">
+      <h2>一、项目背景</h2>
+      <p>PDF 格式由 Adobe 于 1993 年发布，是电子文档的事实标准。在 PDF.js 出现之前，浏览器渲染 PDF 只能依赖插件（Adobe Reader、Chrome PDF Viewer），这些插件是黑盒的二进制组件，无法被 Web 开发者定制和控制。</p>
+      <p><strong>PDF.js 的核心使命：用纯 JavaScript 和 HTML5 Canvas 在浏览器中完整解析和渲染 PDF。</strong>它不依赖任何原生代码，所有解析逻辑（字体、图像、压缩流、颜色空间）都在 JavaScript 中完成，这使得它天然跨平台、可嵌入任何 Web 应用。</p>
+      <div class="callout callout-info">
+        <div class="callout-title">📌 为什么这个库值得深度学习</div>
+        <p>PDF.js 是一个「全栈 Web 引擎」的绝佳案例：它涵盖了二进制格式解析、状态机驱动的词法分析、流式编解码、字体工程、颜色管理、Canvas 渲染管线、Web Worker 多线程架构，以及一个完整的 UI Viewer。几乎每一个子领域都是独立的技术深水区。</p>
+      </div>
+    </section>
+
+    <section id="quickstart">
+      <h2>二、快速上手</h2>
+      <h3>最小可运行示例</h3>
+      <pre><code><span class="cm">// 1. 引入库</span>
+<span class="kw">import</span> * <span class="kw">as</span> pdfjsLib <span class="kw">from</span> <span class="str">"pdfjs-dist"</span>;
+
+<span class="cm">// 2. 指定 Worker（核心解析在 Worker 线程中执行）</span>
+pdfjsLib.<span class="fn">GlobalWorkerOptions</span>.workerSrc = <span class="str">"pdf.worker.js"</span>;
+
+<span class="cm">// 3. 加载 PDF → 获取第一页 → 渲染到 Canvas</span>
+<span class="kw">const</span> doc = <span class="kw">await</span> pdfjsLib.<span class="fn">getDocument</span>(<span class="str">"/path/to/file.pdf"</span>).promise;
+<span class="kw">const</span> page = <span class="kw">await</span> doc.getPage(<span class="num">1</span>);
+<span class="kw">const</span> canvas = document.<span class="fn">createElement</span>(<span class="str">"canvas"</span>);
+<span class="kw">await</span> page.<span class="fn">render</span>({ canvasContext: canvas.<span class="fn">getContext</span>(<span class="str">"2d"</span>), viewport: page.<span class="fn">getViewport</span>({ scale: <span class="num">1.5</span> }) }).promise;
+document.body.<span class="fn">appendChild</span>(canvas);</code></pre>
+
+      <h3>常见场景</h3>
+      <pre><code><span class="cm">// 场景1: 从 ArrayBuffer 加载（文件上传）</span>
+<span class="kw">const</span> doc = <span class="kw">await</span> pdfjsLib.<span class="fn">getDocument</span>(arrayBuffer).promise;
+
+<span class="cm">// 场景2: 流式加载 + Range 请求（大文件按需加载）</span>
+<span class="kw">const</span> doc = <span class="kw">await</span> pdfjsLib.<span class="fn">getDocument</span>({
+  url: <span class="str">"/large.pdf"</span>,
+  rangeChunkSize: <span class="num">65536</span>,     <span class="cm">// 每次请求 64KB</span>
+  disableAutoFetch: <span class="kw">false</span>,   <span class="cm">// 自动预取下一页</span>
+}).promise;
+
+<span class="cm">// 场景3: 获取文本内容</span>
+<span class="kw">const</span> textContent = <span class="kw">await</span> page.<span class="fn">getTextContent</span>();
+textContent.items.<span class="fn">forEach</span>(item => console.<span class="fn">log</span>(item.str));</code></pre>
+
+      <div class="callout callout-tip">
+        <div class="callout-title">💡 与原生浏览器 PDF Viewer 的等价对比</div>
+        <p>如果你用过 Chrome 的内置 PDF 查看器，会发现它其实是基于 PDF.js 的 Fork（Chromium 内置的 PDFium 是 C++ 实现）。PDF.js 用 JS 做了同样的事：解析 PDF 二进制 → 生成绘制指令 → Canvas 渲染。区别在于 PDF.js 让你可以完全控制渲染管线的每一环节。</p>
+      </div>
+    </section>
+
+    <section id="modules">
+      <h2>三、模块导航</h2>
+      <p>PDF.js 按职责分为四大层。点击卡片进入各模块的深度分析：</p>
+      <div class="module-grid">
+        <a class="module-card" href="module-parsing.html">
+          <h3>📄 PDF 解析核心链路</h3>
+          <p>Lexer → Parser → XRef → Catalog → Evaluator，从二进制字节流到结构化算子列表的完整路径。</p>
+          <span class="module-tag">lib/core/</span>
+        </a>
+        <a class="module-card" href="module-rendering.html">
+          <h3>🎨 渲染管线与 Worker 架构</h3>
+          <p>主线程 ↔ Worker 消息通信、OperatorList 到 Canvas 绘制指令、TextLayer 和 AnnotationLayer 的叠加渲染。</p>
+          <span class="module-tag">lib/display/ + lib/web/</span>
+        </a>
+        <a class="module-card" href="module-fonts-streams.html">
+          <h3>🔤 字体系统与流编解码</h3>
+          <p>Type1/CFF/TrueType 字体解析、CMap 字符映射、Flate/JPEG/JBIG2 压缩流解码、加密与解密。</p>
+          <span class="module-tag">lib/core/ 子模块</span>
+        </a>
+      </div>
+    </section>
+
+    <section id="engineering">
+      <h2>四、工程化方案</h2>
+      <table>
+        <tr><th>维度</th><th>方案</th><th>说明</th></tr>
+        <tr><td>构建工具</td><td>Gulp + Webpack</td><td>Gulp 编排构建流水线，Webpack 打包 viewer；源码使用 Closure Compiler 风格的类型注解</td></tr>
+        <tr><td>包管理</td><td>npm（Monorepo 风格）</td><td>一个仓库包含 pdfjs、pdfjs-display、pdfjs-test 等多个构建目标</td></tr>
+        <tr><td>测试</td><td>自定义测试框架 + Jasmine</td><td>core 层用专用 test runner，display 层用浏览器端 Jasmine；超过 2000 个测试用例</td></tr>
+        <tr><td>Lint</td><td>ESLint（Mozilla 自定义规则）</td><td>严格禁止 <code>for...in</code>（防止 Array 原型被污染），要求 <code>Object.hasOwn</code></td></tr>
+        <tr><td>CI/CD</td><td>GitHub Actions</td><td>每次 PR 运行完整测试矩阵（多个浏览器 + Node.js）</td></tr>
+        <tr><td>发布</td><td>pdfjs-dist npm 包</td><td>每个版本同时发布 modern（支持 class private fields）和 legacy（兼容旧浏览器）两个构建</td></tr>
+        <tr><td>版本管理</td><td>Git Tag + Changelog</td><td>版本号由 pdfjs.config 驱动，release 自动生成 dist zip</td></tr>
+      </table>
+    </section>
+
+    <section id="architecture">
+      <h2>五、架构总览</h2>
+      <pre class="mermaid">
+graph TD
+    A["📦 PDF 文件<br/>二进制字节流"] --> B["🔤 Lexer<br/>词法分析器"]
+    B --> C["🌳 Parser<br/>语法解析器"]
+    C --> D["📋 XRef<br/>交叉引用表"]
+    D --> E["📖 Catalog<br/>文档目录树"]
+    E --> F["⚙️ PartialEvaluator<br/>页面内容求值"]
+    F --> G["📜 OperatorList<br/>图形算子列表"]
+    G --> H["🎨 CanvasGraphics<br/>Canvas 绘制"]
+
+    subgraph WORKER["Web Worker 线程"]
+        B
+        C
+        D
+        E
+        F
+        G
+    end
+
+    subgraph MAIN["主线程"]
+        H
+        I["📄 getDocument API"]
+        J["🖼️ TextLayer / AnnotationLayer"]
+    end
+
+    I -.->|"postMessage"| WORKER
+    WORKER -.->|"Transferable"| MAIN
+
+    style WORKER fill:#eff6ff,stroke:#2563eb
+    style MAIN fill:#ecfdf5,stroke:#059669
+      </pre>
+      <p class="mermaid-caption">图：PDF.js 整体架构——所有解析工作在 Worker 线程进行，主线程只负责 UI 和 Canvas 渲染</p>
+
+      <h3>架构设计核心决策：主线程 / Worker 分离</h3>
+      <p>PDF 解析是 CPU 密集型操作（特别是字体解析和图像解码）。PDF.js 将<strong>所有解析逻辑放在 Web Worker 中</strong>，主线程只负责：</p>
+      <ul>
+        <li>发起 <code>getDocument()</code> 调用</li>
+        <li>接收 Worker 传回的 <code>OperatorList</code>（图形指令序列）</li>
+        <li>在 Canvas 上执行绘制</li>
+        <li>管理 TextLayer、AnnotationLayer 等 DOM 叠加层</li>
+      </ul>
+      <p>Worker 和主线程通过 <code>MessageHandler</code>（基于 <code>postMessage</code> 的 RPC 封装）通信。数据传输使用 Transferable Objects 避免内存复制。</p>
+    </section>
+
+    <section id="scale">
+      <h2>六、项目规模</h2>
+      <table>
+        <tr><th>层级</th><th>文件数</th><th>典型文件大小</th><th>职责</th></tr>
+        <tr><td>lib/core/</td><td>74</td><td>200 ~ 4600 行</td><td>PDF 解析引擎：Lexer、Parser、XRef、字体、图像、颜色空间</td></tr>
+        <tr><td>lib/display/</td><td>23</td><td>100 ~ 2800 行</td><td>渲染与 API 层：CanvasGraphics、AnnotationLayer、SVGGraphics</td></tr>
+        <tr><td>lib/web/</td><td>54</td><td>80 ~ 2800 行</td><td>Viewer UI：工具栏、侧边栏、缩略图、搜索、打印</td></tr>
+        <tr><td>lib/shared/</td><td>7</td><td>80 ~ 1060 行</td><td>跨层共享：工具函数、MessageHandler、MurmurHash3</td></tr>
+        <tr><td>lib/test/</td><td>~84</td><td>—</td><td>单元测试与集成测试</td></tr>
+        <tr><td><strong>总计</strong></td><td><strong>242</strong></td><td><strong>~123,000 行</strong></td><td></td></tr>
+      </table>
+    </section>
+
+    <section id="history">
+      <h2>七、历史演进与关键决策</h2>
+      <table>
+        <tr><th>版本</th><th>关键决策</th><th>原因</th></tr>
+        <tr><td>v0.2 (2011)</td><td>项目启动，Andreas Gal 在 48 小时内写出原型</td><td>证明「纯 JavaScript 渲染 PDF」可行</td></tr>
+        <tr><td>v1.0 (2014)</td><td>引入 Web Worker 架构</td><td>PDF 解析阻塞主线程导致 UI 卡顿，将解析移到 Worker 解决</td></tr>
+        <tr><td>v2.0 (2018)</td><td>完全重写为 ES6 class + module</td><td>抛弃旧的 prototype 继承模式，提升可维护性</td></tr>
+        <tr><td>v2.5</td><td>支持 XFA 表单（动态 PDF）</td><td>企业级需求——政府/金融领域的动态 PDF 表单渲染</td></tr>
+        <tr><td>v5.7 (2026.04)</td><td>引入 PS Lexer/Parser 的 Wasm 编译器</td><td>PostScript 函数求值是性能瓶颈，Wasm 加速 10x+</td></tr>
+      </table>
+      <div class="callout callout-insight">
+        <div class="callout-title">🧠 教学价值最高的设计决策</div>
+        <p><strong>为什么 OperatorList 而非直接绘制？</strong>PDF.js 不直接在 Worker 中绘制（Worker 无法访问 DOM/Canvas），而是生成一个平台无关的图形指令序列（OperatorList）。这个中间表示既可以在浏览器 Canvas 上绘制，也可以导出为 SVG，还可以在 Node.js 中渲染为位图。这是一个教科书级别的「平台抽象层」设计。</p>
+      </div>
+    </section>
+
+    <section id="reading-path">
+      <h2>八、推荐学习路径</h2>
+      <p>按以下顺序阅读源码，逐步建立对 PDF.js 的心智模型：</p>
+      <ol class="reading-path">
+        <li>
+          <span class="step-num">1</span>
+          <span class="step-file">lib/shared/util.js</span>
+          <span class="step-desc">类型定义、OPS 算子表、工具函数——先理解 PDF.js 的「词汇表」</span>
+        </li>
+        <li>
+          <span class="step-num">2</span>
+          <span class="step-file">lib/core/primitives.js</span>
+          <span class="step-desc">PDF 基本数据结构：Name、Dict、Ref、Cmd——PDF 世界的「原子」</span>
+        </li>
+        <li>
+          <span class="step-num">3</span>
+          <span class="step-file">lib/core/parser.js</span>
+          <span class="step-desc">Lexer + Parser：如何把字节流解析为结构化对象</span>
+        </li>
+        <li>
+          <span class="step-num">4</span>
+          <span class="step-file">lib/core/xref.js</span>
+          <span class="step-desc">交叉引用表：PDF 的对象定位机制</span>
+        </li>
+        <li>
+          <span class="step-num">5</span>
+          <span class="step-file">lib/display/api.js</span>
+          <span class="step-desc">公开 API、Worker 通信——从用户调用到底层执行的桥梁</span>
+        </li>
+        <li>
+          <span class="step-num">6</span>
+          <span class="step-file">lib/display/canvas.js</span>
+          <span class="step-desc">CanvasGraphics：2880 行的 Canvas 渲染器</span>
+        </li>
+        <li>
+          <span class="step-num">7</span>
+          <span class="step-file">lib/core/evaluator.js</span>
+          <span class="step-desc">PartialEvaluator：4600 行的求值引擎（最复杂模块）</span>
+        </li>
+      </ol>
+    </section>
+
+    <footer class="page-footer">
+      <span></span>
+      <a href="module-parsing.html">下一章：PDF 解析核心链路 →</a>
+    </footer>
+  </main>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'default'});</script>
+</body>
+</html>

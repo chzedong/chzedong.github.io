@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF.js 深度解析 — 字体系统与流编解码</title>
+  <style>
+    :root {
+      --color-bg: #ffffff; --color-bg-secondary: #f8f9fa; --color-bg-tertiary: #f1f3f5;
+      --color-text: #1a1a2e; --color-text-secondary: #495057; --color-text-muted: #868e96;
+      --color-border: #dee2e6; --color-border-light: #e9ecef;
+      --color-primary: #2563eb; --color-primary-light: #eff6ff; --color-primary-dark: #1d4ed8;
+      --color-accent: #7c3aed; --color-accent-light: #f5f3ff;
+      --color-success: #059669; --color-success-bg: #ecfdf5;
+      --color-warning: #d97706; --color-warning-bg: #fffbeb;
+      --color-danger: #dc2626; --color-danger-bg: #fef2f2;
+      --color-info: #0891b2; --color-info-bg: #ecfeff;
+      --color-code-bg: #f1f5f9; --color-code-text: #1e293b;
+      --color-inline-code-bg: #f1f5f9; --color-inline-code-text: #e11d48;
+      --sidebar-width: 260px; --max-content-width: 860px;
+      --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
+      --font-mono: "SF Mono", "Fira Code", "Fira Mono", "Consolas", monospace;
+      --radius: 8px; --shadow-sm: 0 1px 2px rgba(0,0,0,0.05); --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07); --transition: 150ms ease;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --color-bg: #0f172a; --color-bg-secondary: #1e293b; --color-bg-tertiary: #334155;
+        --color-text: #e2e8f0; --color-text-secondary: #94a3b8; --color-text-muted: #64748b;
+        --color-border: #334155; --color-border-light: #1e293b;
+        --color-primary: #3b82f6; --color-primary-light: #1e3a5f; --color-primary-dark: #60a5fa;
+        --color-accent: #8b5cf6; --color-accent-light: #2e1065;
+        --color-code-bg: #1e293b; --color-code-text: #e2e8f0;
+        --color-inline-code-bg: #334155; --color-inline-code-text: #f87171;
+      }
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth;scroll-padding-top:20px}
+    body{font-family:var(--font-sans);font-size:15px;line-height:1.7;color:var(--color-text);background:var(--color-bg);-webkit-font-smoothing:antialiased}
+    .layout{display:flex;min-height:100vh}
+    .sidebar{position:fixed;top:0;left:0;width:var(--sidebar-width);height:100vh;background:var(--color-bg-secondary);border-right:1px solid var(--color-border);overflow-y:auto;padding:24px 20px;z-index:100}
+    .sidebar-header{font-size:13px;font-weight:600;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--color-border)}
+    .sidebar-title{font-size:16px;font-weight:700;color:var(--color-text);margin-bottom:20px;line-height:1.3}
+    .sidebar-title a{color:inherit;text-decoration:none}
+    .sidebar-nav{list-style:none}
+    .sidebar-nav li{margin-bottom:2px}
+    .sidebar-nav a{display:block;padding:6px 12px;border-radius:6px;color:var(--color-text-secondary);text-decoration:none;font-size:14px;transition:all var(--transition)}
+    .sidebar-nav a:hover{background:var(--color-bg-tertiary);color:var(--color-text)}
+    .sidebar-nav a.active{background:var(--color-primary-light);color:var(--color-primary);font-weight:600}
+    .sidebar-nav .sub-nav{padding-left:16px}
+    .sidebar-nav .sub-nav a{font-size:13px}
+    .main{margin-left:var(--sidebar-width);flex:1;max-width:var(--max-content-width);padding:48px 56px 80px}
+    .page-header{margin-bottom:40px;padding-bottom:32px;border-bottom:1px solid var(--color-border)}
+    .page-header h1{font-size:32px;font-weight:800;line-height:1.2;color:var(--color-text);margin-bottom:12px;letter-spacing:-0.02em}
+    .page-header .subtitle{font-size:17px;color:var(--color-text-secondary);line-height:1.6;margin-bottom:16px}
+    .badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+    .badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:500;background:var(--color-bg-tertiary);color:var(--color-text-secondary)}
+    .badge-primary{background:var(--color-primary-light);color:var(--color-primary)}
+    .badge-accent{background:var(--color-accent-light);color:var(--color-accent)}
+    section{margin-bottom:48px}
+    section h2{font-size:24px;font-weight:700;color:var(--color-text);margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid var(--color-border-light);letter-spacing:-0.01em}
+    section h3{font-size:19px;font-weight:600;color:var(--color-text);margin-top:28px;margin-bottom:12px}
+    section h4{font-size:16px;font-weight:600;color:var(--color-text-secondary);margin-top:20px;margin-bottom:8px}
+    section p{margin-bottom:14px;color:var(--color-text-secondary)}
+    section ul,section ol{margin-bottom:14px;padding-left:24px;color:var(--color-text-secondary)}
+    section li{margin-bottom:6px}
+    code{font-family:var(--font-mono);font-size:13px;background:var(--color-inline-code-bg);color:var(--color-inline-code-text);padding:2px 6px;border-radius:4px}
+    pre{background:var(--color-code-bg);color:var(--color-code-text);border-radius:var(--radius);padding:20px 24px;overflow-x:auto;margin-bottom:18px;border:1px solid var(--color-border-light);font-size:13px;line-height:1.6}
+    pre code{background:none;color:inherit;padding:0;font-size:inherit}
+    .kw{color:#7c3aed;font-weight:600}
+    .str{color:#059669}
+    .num{color:#d97706}
+    .cm{color:#868e96;font-style:italic}
+    .fn{color:#2563eb}
+    @media (prefers-color-scheme: dark){.kw{color:#a78bfa}.str{color:#34d399}.num{color:#fbbf24}.cm{color:#64748b}.fn{color:#60a5fa}}
+    .callout{padding:16px 20px;border-radius:var(--radius);margin-bottom:18px;border-left:4px solid;font-size:14px}
+    .callout-title{font-weight:600;margin-bottom:4px}
+    .callout-info{background:var(--color-info-bg);border-color:var(--color-info)}
+    .callout-tip{background:var(--color-success-bg);border-color:var(--color-success)}
+    .callout-warning{background:var(--color-warning-bg);border-color:var(--color-warning)}
+    .callout-insight{background:var(--color-accent-light);border-color:var(--color-accent)}
+    .code-ref{border:1px solid var(--color-border);border-radius:var(--radius);margin-bottom:20px;overflow:hidden}
+    .code-ref__header{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:var(--color-bg-tertiary);border-bottom:1px solid var(--color-border-light);font-size:12px}
+    .code-ref__path{font-family:var(--font-mono);color:var(--color-text-muted);font-weight:500}
+    .code-ref pre{margin:0;border:none;border-radius:0}
+    table{width:100%;border-collapse:collapse;margin-bottom:18px;font-size:14px}
+    th,td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--color-border-light)}
+    th{font-weight:600;color:var(--color-text);background:var(--color-bg-secondary);font-size:13px;text-transform:uppercase;letter-spacing:0.03em}
+    td{color:var(--color-text-secondary)}
+    tr:hover td{background:var(--color-bg-secondary)}
+    .mermaid-caption{text-align:center;color:var(--color-text-muted);font-size:13px;margin-top:-10px;margin-bottom:20px}
+    .page-footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--color-border);display:flex;justify-content:space-between;align-items:center}
+    .page-footer a{color:var(--color-primary);text-decoration:none;font-weight:600}
+    .page-footer a:hover{text-decoration:underline}
+    .arch-highlight{padding:20px 24px;border-radius:var(--radius);background:var(--color-accent-light);border-left:4px solid var(--color-accent);margin-bottom:20px}
+    .arch-highlight h4{margin-top:0;color:var(--color-accent)}
+  </style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-header">PDF.js 深度解析</div>
+    <div class="sidebar-title"><a href="index.html">← 项目总览</a></div>
+    <ul class="sidebar-nav">
+      <li><a href="#font-overview" class="active">字体系统总览</a></li>
+      <li><a href="#font-types">PDF 字体类型</a></li>
+      <li><a href="#cff">CFF 字体解析</a></li>
+      <li><a href="#cmap">CMap 字符映射</a></li>
+      <li><a href="#unicode">Unicode 映射与文本提取</a></li>
+      <li><a href="#font-renderer">FontRenderer</a></li>
+      <li><a href="#stream-overview">流编解码总览</a></li>
+      <li><a href="#stream-chain">解码器链</a></li>
+      <li><a href="#image-codecs">图像编解码</a></li>
+      <li><a href="#crypto">加密与解密</a></li>
+      <li class="sub-nav">
+        <a href="index.html">🏠 项目总览</a>
+        <a href="module-parsing.html">📄 解析链路</a>
+        <a href="module-rendering.html">🎨 渲染管线</a>
+      </li>
+    </ul>
+  </aside>
+  <main class="main">
+    <header class="page-header">
+      <h1>🔤 字体系统与流编解码</h1>
+      <p class="subtitle">PDF.js 最深度的两个技术领域：字体工程（Type1/CFF/TrueType 解析与渲染）和流处理（Flate/LZW/JPEG/JBIG2 编解码器链）。</p>
+      <div class="badges">
+        <span class="badge badge-primary">fonts.js: 2958行</span>
+        <span class="badge badge-accent">cff_parser.js</span>
+        <span class="badge">parser.js 文件头</span>
+        <span class="badge">~20 个流解码器</span>
+      </div>
+    </header>
+
+    <section id="font-overview">
+      <h2>一、字体系统总览</h2>
+      <p>字体是 PDF 渲染中最复杂的子系统。PDF 文件可以内嵌多种格式的字体数据，PDF.js 需要在纯 JavaScript 中解析并渲染这些字体。这相当于在浏览器中实现了一个<strong>迷你字体引擎</strong>。</p>
+
+      <pre class="mermaid">
+flowchart TD
+    A["📄 PDF 字体字典<br/>&lt;&lt; /Type /Font /Subtype /Type1 &gt;&gt;"] --> B{"字体类型判断<br/>fonts.js → Font.render()"}
+    B -->|Type1| C["🔤 Type1Font<br/>type1_font.js"]
+    B -->|Type1C/CFF| D["🔤 CFFFont<br/>cff_parser.js + cff_font.js"]
+    B -->|TrueType| E["🔤 TrueType<br/>glyf.js + opentype_file_builder.js"]
+    B -->|Type3| F["🔤 Type3Font<br/>用户自定义字形"]
+
+    D --> G["📐 CFF 解析<br/>Charset → CharStrings → 子程序展开"]
+    C --> H["📐 Type1 解析<br/>eexec 解密 → CharStrings"]
+    E --> I["📐 TrueType 解析<br/>cmap/glyf/loca 表"]
+
+    G --> J["🎨 FontRenderer<br/>font_renderer.js"]
+    H --> J
+    I --> J
+
+    J --> K["📜 OperatorList<br/>字体轮廓 → Canvas 路径"]
+
+    style A fill:#fef2f2,stroke:#dc2626
+    style K fill:#ecfdf5,stroke:#059669
+      </pre>
+      <p class="mermaid-caption">图：字体从 PDF 字典到 Canvas 路径的完整流程</p>
+    </section>
+
+    <section id="font-types">
+      <h2>二、PDF 字体类型全景</h2>
+      <p><code>lib/shared/util.js — FontType 枚举</code></p>
+      <table>
+        <tr><th>字体类型</th><th>Subtype</th><th>特点</th><th>对应文件</th></tr>
+        <tr><td><strong>Type1</strong></td><td><code>/Type1</code></td><td>Adobe 经典格式，使用 PostScript 子程序定义字形。数据通常被 eexec 加密</td><td><code>type1_parser.js</code><br/><code>type1_font.js</code></td></tr>
+        <tr><td><strong>CFF / Type1C</strong></td><td><code>/Type1C</code></td><td>Type1 的紧凑版，用二进制编码。同样使用 CharString 定义字形</td><td><code>cff_parser.js</code><br/><code>cff_font.js</code></td></tr>
+        <tr><td><strong>TrueType / Type2C</strong></td><td><code>/TrueType</code></td><td>Apple/Microsoft 格式，使用 sfnt 容器。支持复合字形和 TrueType 指令</td><td><code>glyf.js</code><br/><code>opentype_file_builder.js</code></td></tr>
+        <tr><td><strong>CIDFontType0</strong></td><td><code>/CIDFontType0</code></td><td>基于 CID 的多字节字体（中日韩），内部通常是 Type1C</td><td>经 CFF 路径处理</td></tr>
+        <tr><td><strong>CIDFontType2</strong></td><td><code>/CIDFontType2</code></td><td>基于 CID 的 TrueType 字体</td><td>经 TrueType 路径处理</td></tr>
+        <tr><td><strong>Type3</strong></td><td><code>/Type3</code></td><td>用户自定义字形——每个字形是一个 PDF 内容流（可含任意 PDF 图形操作）</td><td><code>fonts.js</code> 内直接处理</td></tr>
+      </table>
+    </section>
+
+    <section id="cff">
+      <h2>三、CFF 字体解析 — PDF.js 中最精密的解析器</h2>
+      <p><code>lib/core/cff_parser.js</code> — CFF（Compact Font Format）解析器</p>
+      <p>CFF 是 OpenType/CFF 字体的核心格式，也是 PDF 中最常见的 Type1C 字体格式。它的设计目标是在保持 Type1 的全部表现力的同时，使用<strong>更紧凑的二进制编码</strong>（Type2 CharString）。</p>
+
+      <p><strong>CFF 文件结构</strong>：</p>
+      <pre><code><span class="cm"># CFF 数据的核心段</span>
+Header   — 版本、hdrSize、offSize
+Name     — 字体名索引
+Top DICT — 全局字体参数（CharStrings 偏移、CharSet 偏移、私有字典偏移等）
+String   — 字符串索引
+Global Subrs — 全局子程序（可被 CharString 调用）
+CharStrings  — 每个字形的 Type2 字节码
+Private DICT — 私有参数字典
+Local Subrs  — 局部子程序</code></pre>
+
+      <div class="arch-highlight">
+        <h4>🏗️ CFF 解析的核心挑战：子程序展开（Subroutinization）</h4>
+        <p>Type2 CharString 支持 <code>callsubr</code> 和 <code>callgsubr</code> 操作符——在字形定义中调用局部或全局子程序。这类似于编程语言的函数调用。CFFParser 需要在解析时展开所有子程序调用，同时还要处理 <code>flex</code> 机制（Type2 的平滑曲线优化）和<strong>提示指令（hints）</strong>——这些提示告诉光栅化器如何在小字号时对齐笔划到像素网格。</p>
+        <p>PDF.js 的策略是：解析时展开子程序并忽略提示（因为浏览器渲染引擎有自己的提示策略）。这使得 CFF 解析后得到的是<strong>扁平的纯贝塞尔曲线路径</strong>，可以直接交给 Canvas 绘制。</p>
+      </div>
+
+      <div class="callout callout-insight">
+        <div class="callout-title">🧠 如果让你来实现 CFF 解析</div>
+        <p><strong>问题</strong>：CharString 中的操作符宽度编码是变长的——有的操作符是 1 字节、有的是 2 字节。如何高效解析？</p>
+        <p><strong>直觉方案</strong>：维护一个大的 switch-case 映射表。</p>
+        <p><strong>该库的实际做法</strong>：使用 <code>256</code> 长度的查找表，其中 1 字节操作符直接映射，<code>0x0C</code>（escape）后面跟的字节作为 2 字节操作符。解析器逐字节扫描，遇到数字压栈（Type2 对整数有特殊的编码），遇到操作符就执行对应的绘制函数。</p>
+        <p><strong>差异分析</strong>：Type2 的整数编码是精心设计的空间优化——<code>-107</code> 到 <code>+107</code> 范围内的数字编码为 1 字节，超出范围使用 2-5 字节。这比直接存储 32-bit 浮点数节省了 70%+ 的空间。解析这种编码是理解「二进制格式设计」的优秀案例。</p>
+      </div>
+    </section>
+
+    <section id="cmap">
+      <h2>四、CMap — 字符映射表</h2>
+      <p><code>lib/core/cmap.js</code></p>
+      <p>CMap（Character Map）将 PDF 内容流中的字符代码（通常 1-2 字节）映射到字形索引或 Unicode 码点。这是 PDF 文本正确显示的关键。</p>
+
+      <p><strong>三种映射方式</strong>：</p>
+      <table>
+        <tr><th>方式</th><th>机制</th><th>适用场景</th></tr>
+        <tr><td><strong>内置编码</strong></td><td>StandardEncoding、MacRomanEncoding、WinAnsiEncoding</td><td>拉丁字体</td></tr>
+        <tr><td><strong>CMap 流</strong></td><td>使用 <code>bfrange</code>/<code>bfchar</code> 操作符定义范围映射</td><td>CJK 字体（中日韩）</td></tr>
+        <tr><td><strong>ToUnicode CMap</strong></td><td>从字符代码直接映射到 Unicode</td><td>所有字体（用于文本提取和搜索）</td></tr>
+      </table>
+
+      <p>CMap 解析器的核心是一个<strong>二分查找树</strong>：<code>bfrange</code> 定义的连续范围如 <code>&lt;0041&gt; &lt;005A&gt; &lt;0061&gt;</code>（A-Z → a-z），<code>bfchar</code> 定义的点映射如 <code>&lt;0041&gt; &lt;0041&gt;</code>，解析后形成一个排序的区间数组，查询时二分查找。</p>
+    </section>
+
+    <section id="unicode">
+      <h2>五、Unicode 映射与文本提取</h2>
+      <p><code>lib/core/to_unicode_map.js</code> + <code>lib/core/unicode.js</code></p>
+      <p>PDF 的文本提取之所以复杂，是因为 PDF 不是为了文本提取而设计的。PDF 内容流中存储的是<strong>字形索引</strong>（glyph index）而非字符编码。要将屏幕上的像素变成可搜索/可复制的 Unicode 文本，需要三层映射：</p>
+
+      <ol>
+        <li><strong>字符代码 → CID/GID</strong>（通过 CMap）</li>
+        <li><strong>CID/GID → Unicode</strong>（通过 ToUnicode CMap）</li>
+        <li><strong>字形名称 → Unicode</strong>（通过 Adobe Glyph List 回退——当 ToUnicode CMap 缺失时）</li>
+      </ol>
+
+      <p><code>glyphlist.js</code> 包含 Adobe 标准的 ~4300 个字形名称到 Unicode 的映射表（例如 <code>Aacute → U+00C1</code>）。<code>unicode.js</code> 包含 Unicode 属性查询（如判断字符是否属于 CJK 范围、是否是结合字符、RTL 语言方向判断等）。</p>
+
+      <div class="callout callout-warning">
+        <div class="callout-title">⚠️ 常见陷阱：ToUnicode 的不可靠性</div>
+        <p>许多 PDF 生成器提供的 ToUnicode CMap 是不完整的甚至是错误的。当 ToUnicode 映射失败时，PDF.js 会回退到字形名称（通过 glyphlist.js）和启发式 Unicode 推断。这使得 PDF.js 的文本提取比大多数竞品更准确，即使面对「糟糕的」PDF 文件。</p>
+      </div>
+    </section>
+
+    <section id="font-renderer">
+      <h2>六、FontRenderer — 从字形轮廓到 Canvas 路径</h2>
+      <p><code>lib/core/font_renderer.js</code></p>
+      <p>当 PDF 字体无法作为系统字体使用时（例如内嵌的 Type1/CFF/Type3 字体），FontRenderer 负责将字形轮廓转换为 Canvas 可绘制的路径。它的输入是 CFF/Type1 解析后的扁平字形数据（一系列 moveTo/lineTo/curveTo 指令），输出是 Canvas 2D 的路径操作。</p>
+
+      <p><strong>字形光栅化的两种模式</strong>：</p>
+      <ol>
+        <li><strong>路径模式</strong> — 使用 <code>ctx.fill()</code> 直接在 Canvas 上绘制字形轮廓。质量最高但较慢</li>
+        <li><strong>字体代理模式</strong>（Font Face） — 将解析出的 OpenType 字体通过 <code>FontFace API</code> 注册为浏览器字体，然后使用 <code>ctx.fillText()</code> 绘制。利用浏览器原生文字渲染（含 subpixel antialiasing），质量和性能均更优</li>
+      </ol>
+
+      <p>v2.16.105 版本默认使用字体代理模式，通过 <code>opentype_file_builder.js</code> 将 PDF 字体数据重新打包为符合 OpenType 规范的字体文件。</p>
+    </section>
+
+    <section id="stream-overview">
+      <h2>七、流编解码总览</h2>
+      <p>PDF 中的几乎所有数据（页面内容、字体、图像）都以<strong>流（Stream）</strong>的形式存储——一个字典（描述如何解码）+ 一段二进制数据。PDF.js 的流处理采用<strong>管道（Pipeline）模式</strong>：每个解码器是一个可组合的流转换器。</p>
+
+      <pre class="mermaid">
+flowchart LR
+    A["📦 原始字节<br/>stream"] --> B["🔓 解密?<br/>DecryptStream"]
+    B --> C["📖 解压缩<br/>FlateStream"]
+    C --> D["🔢 逆预测<br/>PredictorStream"]
+    D --> E["✅ 解码后数据<br/>像素/文本/字体"]
+
+    B -.->|可选| F["🔐 CipherTransform<br/>AES-128 / RC4"]
+    C -.->|可选| G["其他压缩<br/>LZW / RLE / ASCII85"]
+
+    style A fill:#fef2f2,stroke:#dc2626
+    style E fill:#ecfdf5,stroke:#059669
+      </pre>
+      <p class="mermaid-caption">图：PDF 流数据的典型解码管道</p>
+    </section>
+
+    <section id="stream-chain">
+      <h2>八、解码器链 — 可组合的流转换</h2>
+      <p><code>lib/core/parser.js:30-55</code> — 解码器注册表</p>
+      <p>PDF 使用 <code>/Filter</code> 和 <code>/DecodeParms</code> 字典字段指定解码方式。多个 filter 可以串联（例如先 ASCII85 解码，再 Flate 解压）。PDF.js 通过策略模式实现可互换的解码器：</p>
+
+      <table>
+        <tr><th>解码器</th><th>文件</th><th>算法</th><th>复杂度</th></tr>
+        <tr><td><strong>FlateDecode</strong></td><td><code>flate_stream.js</code></td><td>zlib/deflate（使用浏览器原生 <code>DecompressionStream</code> 或 pako）</td><td>最常用</td></tr>
+        <tr><td><strong>LZWDecode</strong></td><td><code>lzw_stream.js</code></td><td>Lempel-Ziv-Welch（GIF 同款算法）</td><td>较旧，但经典</td></tr>
+        <tr><td><strong>ASCII85Decode</strong></td><td><code>ascii_85_stream.js</code></td><td>Base85 编码，每 4 字节 → 5 个可打印 ASCII 字符</td><td>Adobe 专用</td></tr>
+        <tr><td><strong>ASCIIHexDecode</strong></td><td><code>ascii_hex_stream.js</code></td><td>十六进制编码</td><td>简单</td></tr>
+        <tr><td><strong>RunLengthDecode</strong></td><td><code>run_length_stream.js</code></td><td>游程编码（RLE）</td><td>单色图像常用</td></tr>
+        <tr><td><strong>Predictor</strong></td><td><code>predictor_stream.js</code></td><td>PNG 预测器（None, Sub, Up, Avg, Paeth）</td><td>Flate 之后使用</td></tr>
+        <tr><td><strong>CCITTFaxDecode</strong></td><td><code>ccitt_stream.js</code></td><td>Group 3 / Group 4 传真编码</td><td>黑白文档扫描</td></tr>
+      </table>
+
+      <p>解码器的组合由 <code>Parser.makeStream()</code> 在运行时动态构建：读取字典的 <code>/Filter</code> 字段，按照数组顺序逐层包装，形成 <code>FlateStream(ASCII85Stream(DecryptStream(RawStream)))</code> 的嵌套结构。每层只负责自己的解码逻辑，完全符合<strong>装饰器模式</strong>。</p>
+
+      <div class="callout callout-insight">
+        <div class="callout-title">🧠 如果让你来实现解码器组合</div>
+        <p><strong>问题</strong>：PDF 的 Filter 数组可能是 <code>[/ASCII85Decode /FlateDecode]</code>，也可能是单个 <code>/FlateDecode</code>。如何优雅地组合解码器？</p>
+        <p><strong>直觉方案</strong>：if-else 或 switch 判断，手动嵌套。</p>
+        <p><strong>该库的实际做法</strong>：维护一个 filter 名称到构造函数的内存表，使用 <code>Array.reduceRight()</code> 从内到外构建装饰器链：</p>
+        <pre><code><span class="kw">const</span> filterChain = filters.<span class="fn">reduceRight</span>(
+  (stream, { name, params }) => <span class="kw">new</span> FILTER_MAP[name](stream, params),
+  rawStream
+);</code></pre>
+        <p>这种函数式组合比 switch-case 更清晰，而且新增解码器只需向 <code>FILTER_MAP</code> 注册即可——开闭原则的教科书级别实现。</p>
+      </div>
+    </section>
+
+    <section id="image-codecs">
+      <h2>九、图像编解码</h2>
+      <p>PDF 支持多种图像格式的内嵌。PDF.js 在 JavaScript 中实现了以下图像解码器：</p>
+
+      <table>
+        <tr><th>格式</th><th>文件</th><th>解码策略</th></tr>
+        <tr><td><strong>JPEG</strong></td><td><code>jpg.js</code><br/><code>jpeg_stream.js</code></td><td><strong>直通（pass-through）</strong>：直接将 JPEG 二进制传给 <code>ctx.drawImage()</code>，零质量损失</td></tr>
+        <tr><td><strong>JPEG 2000 (JPX)</strong></td><td><code>jpx.js</code><br/><code>jpx_stream.js</code></td><td><strong>自研解码器</strong>：完整实现 JPEG 2000 标准（小波变换、EBCOT 算术编码），约 3000 行代码。v2.16 开始可选使用 OpenJPEG WASM</td></tr>
+        <tr><td><strong>JBIG2</strong></td><td><code>jbig2.js</code><br/><code>jbig2_stream.js</code></td><td><strong>自研解码器</strong>：1-bit 图像压缩标准（常用于扫描文档）。使用算术解码 + 模式匹配</td></tr>
+        <tr><td><strong>CCITT</strong></td><td><code>ccitt.js</code><br/><code>ccitt_stream.js</code></td><td>Group 3/4 传真解码，用于黑白文档</td></tr>
+      </table>
+
+      <div class="callout callout-tip">
+        <div class="callout-title">💡 JPX 解码器 — PDF.js 最惊人的工程壮举</div>
+        <p>JPEG 2000（JPX）是 ISO/IEC 15444 标准，其复杂度远高于 JPEG。PDF.js 的 <code>jpx.js</code> 在纯 JavaScript 中实现了小波变换（5/3 和 9/7 滤波器）、EBCOT（Embedded Block Coding with Optimal Truncation）、MQ 算术编码器和颜色变换。这是整个项目中学术含金量最高的模块，也是 JavaScript 性能优化的极致测试。</p>
+      </div>
+    </section>
+
+    <section id="crypto">
+      <h2>十、加密与解密</h2>
+      <p><code>lib/core/crypto.js</code> + <code>lib/core/decrypt_stream.js</code></p>
+      <p>PDF 支持多种加密标准。PDF.js 需要在内置这些解密能力的同时，不能导出加密功能（遵守加密导出法规）。</p>
+
+      <table>
+        <tr><th>安全处理器</th><th>标准</th><th>加密算法</th></tr>
+        <tr><td><strong>Standard</strong></td><td>PDF 1.x - 2.0</td><td>RC4 (40/128 bit)、AES-128、AES-256</td></tr>
+        <tr><td><strong>公钥</strong></td><td>PDF 2.0</td><td>PKCS#7 信封加密</td></tr>
+      </table>
+
+      <p><strong>加密的工作方式</strong>：</p>
+      <ol>
+        <li><code>CipherTransformFactory</code> 从 Trailer 的 Encrypt 字典中提取加密参数（算法、密钥长度、权限标志）</li>
+        <li>使用用户提供的密码 + 文件 ID 派生加密密钥（PDF 2.0 的 AES-256 使用 SHA-256 + SHA-384 + SHA-512 的三重哈希）</li>
+        <li><code>DecryptStream</code> 包装在解码器链的最内层，透明地在读取时解密数据</li>
+      </ol>
+
+      <p><strong>关键设计</strong>：加密/解密完全集成在流处理管道中——上层代码（Parser、Evaluator）完全不知道数据是否被加密。这保持了各层之间的<strong>关注点分离</strong>。</p>
+    </section>
+
+    <footer class="page-footer">
+      <a href="module-rendering.html">← 渲染管线与 Worker 架构</a>
+      <a href="index.html">返回项目总览 ↑</a>
+    </footer>
+  </main>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'default'});</script>
+</body>
+</html>

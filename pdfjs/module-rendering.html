@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF.js 深度解析 — 渲染管线与 Worker 架构</title>
+  <style>
+    :root {
+      --color-bg: #ffffff; --color-bg-secondary: #f8f9fa; --color-bg-tertiary: #f1f3f5;
+      --color-text: #1a1a2e; --color-text-secondary: #495057; --color-text-muted: #868e96;
+      --color-border: #dee2e6; --color-border-light: #e9ecef;
+      --color-primary: #2563eb; --color-primary-light: #eff6ff; --color-primary-dark: #1d4ed8;
+      --color-accent: #7c3aed; --color-accent-light: #f5f3ff;
+      --color-success: #059669; --color-success-bg: #ecfdf5;
+      --color-warning: #d97706; --color-warning-bg: #fffbeb;
+      --color-danger: #dc2626; --color-danger-bg: #fef2f2;
+      --color-info: #0891b2; --color-info-bg: #ecfeff;
+      --color-code-bg: #f1f5f9; --color-code-text: #1e293b;
+      --color-inline-code-bg: #f1f5f9; --color-inline-code-text: #e11d48;
+      --sidebar-width: 260px; --max-content-width: 860px;
+      --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
+      --font-mono: "SF Mono", "Fira Code", "Fira Mono", "Consolas", monospace;
+      --radius: 8px; --shadow-sm: 0 1px 2px rgba(0,0,0,0.05); --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07); --transition: 150ms ease;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --color-bg: #0f172a; --color-bg-secondary: #1e293b; --color-bg-tertiary: #334155;
+        --color-text: #e2e8f0; --color-text-secondary: #94a3b8; --color-text-muted: #64748b;
+        --color-border: #334155; --color-border-light: #1e293b;
+        --color-primary: #3b82f6; --color-primary-light: #1e3a5f; --color-primary-dark: #60a5fa;
+        --color-accent: #8b5cf6; --color-accent-light: #2e1065;
+        --color-code-bg: #1e293b; --color-code-text: #e2e8f0;
+        --color-inline-code-bg: #334155; --color-inline-code-text: #f87171;
+      }
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth;scroll-padding-top:20px}
+    body{font-family:var(--font-sans);font-size:15px;line-height:1.7;color:var(--color-text);background:var(--color-bg);-webkit-font-smoothing:antialiased}
+    .layout{display:flex;min-height:100vh}
+    .sidebar{position:fixed;top:0;left:0;width:var(--sidebar-width);height:100vh;background:var(--color-bg-secondary);border-right:1px solid var(--color-border);overflow-y:auto;padding:24px 20px;z-index:100}
+    .sidebar-header{font-size:13px;font-weight:600;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--color-border)}
+    .sidebar-title{font-size:16px;font-weight:700;color:var(--color-text);margin-bottom:20px;line-height:1.3}
+    .sidebar-title a{color:inherit;text-decoration:none}
+    .sidebar-nav{list-style:none}
+    .sidebar-nav li{margin-bottom:2px}
+    .sidebar-nav a{display:block;padding:6px 12px;border-radius:6px;color:var(--color-text-secondary);text-decoration:none;font-size:14px;transition:all var(--transition)}
+    .sidebar-nav a:hover{background:var(--color-bg-tertiary);color:var(--color-text)}
+    .sidebar-nav a.active{background:var(--color-primary-light);color:var(--color-primary);font-weight:600}
+    .sidebar-nav .sub-nav{padding-left:16px}
+    .sidebar-nav .sub-nav a{font-size:13px}
+    .main{margin-left:var(--sidebar-width);flex:1;max-width:var(--max-content-width);padding:48px 56px 80px}
+    .page-header{margin-bottom:40px;padding-bottom:32px;border-bottom:1px solid var(--color-border)}
+    .page-header h1{font-size:32px;font-weight:800;line-height:1.2;color:var(--color-text);margin-bottom:12px;letter-spacing:-0.02em}
+    .page-header .subtitle{font-size:17px;color:var(--color-text-secondary);line-height:1.6;margin-bottom:16px}
+    .badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+    .badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:500;background:var(--color-bg-tertiary);color:var(--color-text-secondary)}
+    .badge-primary{background:var(--color-primary-light);color:var(--color-primary)}
+    .badge-accent{background:var(--color-accent-light);color:var(--color-accent)}
+    .badge-success{background:var(--color-success-bg);color:var(--color-success)}
+    section{margin-bottom:48px}
+    section h2{font-size:24px;font-weight:700;color:var(--color-text);margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid var(--color-border-light);letter-spacing:-0.01em}
+    section h3{font-size:19px;font-weight:600;color:var(--color-text);margin-top:28px;margin-bottom:12px}
+    section h4{font-size:16px;font-weight:600;color:var(--color-text-secondary);margin-top:20px;margin-bottom:8px}
+    section p{margin-bottom:14px;color:var(--color-text-secondary)}
+    section ul,section ol{margin-bottom:14px;padding-left:24px;color:var(--color-text-secondary)}
+    section li{margin-bottom:6px}
+    code{font-family:var(--font-mono);font-size:13px;background:var(--color-inline-code-bg);color:var(--color-inline-code-text);padding:2px 6px;border-radius:4px}
+    pre{background:var(--color-code-bg);color:var(--color-code-text);border-radius:var(--radius);padding:20px 24px;overflow-x:auto;margin-bottom:18px;border:1px solid var(--color-border-light);font-size:13px;line-height:1.6}
+    pre code{background:none;color:inherit;padding:0;font-size:inherit}
+    .kw{color:#7c3aed;font-weight:600}
+    .str{color:#059669}
+    .num{color:#d97706}
+    .cm{color:#868e96;font-style:italic}
+    .fn{color:#2563eb}
+    @media (prefers-color-scheme: dark){.kw{color:#a78bfa}.str{color:#34d399}.num{color:#fbbf24}.cm{color:#64748b}.fn{color:#60a5fa}}
+    .callout{padding:16px 20px;border-radius:var(--radius);margin-bottom:18px;border-left:4px solid;font-size:14px}
+    .callout-title{font-weight:600;margin-bottom:4px}
+    .callout-info{background:var(--color-info-bg);border-color:var(--color-info)}
+    .callout-tip{background:var(--color-success-bg);border-color:var(--color-success)}
+    .callout-warning{background:var(--color-warning-bg);border-color:var(--color-warning)}
+    .callout-insight{background:var(--color-accent-light);border-color:var(--color-accent)}
+    .code-ref{border:1px solid var(--color-border);border-radius:var(--radius);margin-bottom:20px;overflow:hidden}
+    .code-ref__header{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:var(--color-bg-tertiary);border-bottom:1px solid var(--color-border-light);font-size:12px}
+    .code-ref__path{font-family:var(--font-mono);color:var(--color-text-muted);font-weight:500}
+    .code-ref pre{margin:0;border:none;border-radius:0}
+    table{width:100%;border-collapse:collapse;margin-bottom:18px;font-size:14px}
+    th,td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--color-border-light)}
+    th{font-weight:600;color:var(--color-text);background:var(--color-bg-secondary);font-size:13px;text-transform:uppercase;letter-spacing:0.03em}
+    td{color:var(--color-text-secondary)}
+    tr:hover td{background:var(--color-bg-secondary)}
+    .mermaid-caption{text-align:center;color:var(--color-text-muted);font-size:13px;margin-top:-10px;margin-bottom:20px}
+    .page-footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--color-border);display:flex;justify-content:space-between;align-items:center}
+    .page-footer a{color:var(--color-primary);text-decoration:none;font-weight:600}
+    .page-footer a:hover{text-decoration:underline}
+    .arch-highlight{padding:20px 24px;border-radius:var(--radius);background:var(--color-accent-light);border-left:4px solid var(--color-accent);margin-bottom:20px}
+    .arch-highlight h4{margin-top:0;color:var(--color-accent)}
+  </style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-header">PDF.js 深度解析</div>
+    <div class="sidebar-title"><a href="index.html">← 项目总览</a></div>
+    <ul class="sidebar-nav">
+      <li><a href="#overview" class="active">渲染链路总览</a></li>
+      <li><a href="#worker">Worker 架构</a></li>
+      <li><a href="#message">MessageHandler 通信</a></li>
+      <li><a href="#api">API 层详解</a></li>
+      <li><a href="#canvas">CanvasGraphics 渲染器</a></li>
+      <li><a href="#layers">TextLayer / AnnotationLayer</a></li>
+      <li><a href="#svg">SVG 渲染</a></li>
+      <li><a href="#viewer">Viewer UI 架构</a></li>
+      <li><a href="#perf">性能优化策略</a></li>
+      <li class="sub-nav">
+        <a href="index.html">🏠 项目总览</a>
+        <a href="module-parsing.html">📄 解析链路</a>
+        <a href="module-fonts-streams.html">🔤 字体与流</a>
+      </li>
+    </ul>
+  </aside>
+  <main class="main">
+    <header class="page-header">
+      <h1>🎨 渲染管线与 Worker 架构</h1>
+      <p class="subtitle">从 OperatorList 到屏幕像素：Canvas 渲染器、DOM 叠加层、SVG 导出，以及驱动这一切的 Web Worker 多线程架构。</p>
+      <div class="badges">
+        <span class="badge badge-primary">lib/display/</span>
+        <span class="badge badge-accent">lib/web/</span>
+        <span class="badge badge-success">canvas.js: 2810行</span>
+        <span class="badge">api.js: 2462行</span>
+      </div>
+    </header>
+
+    <section id="overview">
+      <h2>一、渲染链路总览</h2>
+      <pre class="mermaid">
+sequenceDiagram
+    participant User as 👤 用户代码
+    participant API as getDocument()
+    participant Worker as ⚙️ Web Worker
+    participant Main as 🖥️ 主线程
+    participant Canvas as 🎨 Canvas 2D
+
+    User->>API: getDocument(url)
+    API->>Worker: GetDocRequest
+    Worker->>Worker: XRef.parse() → Catalog → Evaluator
+    Worker-->>API: PDFDocumentProxy（页数、元数据）
+
+    User->>API: page.render({viewport})
+    API->>Worker: GetOperatorList(pageIndex)
+    Worker->>Worker: PartialEvaluator.getOperatorList()
+    Worker-->>Main: OperatorList（Transferable）
+    Main->>Canvas: CanvasGraphics.executeOperatorList()
+    Canvas->>Canvas: fillRect / drawImage / fillText ...
+    Canvas-->>User: ✅ 渲染完成
+      </pre>
+      <p class="mermaid-caption">图：从 getDocument() 到 Canvas 绘制的完整时序</p>
+      <p>核心设计原则：<strong>Worker 负责 CPU 密集的解析和求值，主线程只做轻量的 Canvas 绘制和 DOM 操作</strong>。两者通过 <code>postMessage</code> 传输 <code>OperatorList</code>（使用 Transferable Objects 零拷贝）。</p>
+    </section>
+
+    <section id="worker">
+      <h2>二、Worker 架构</h2>
+      <p><code>lib/core/worker.js:47-220</code></p>
+      <p>Worker 端有两层抽象：</p>
+      <ul>
+        <li><strong>WorkerTask</strong> — 单个异步任务的 Promise 封装，支持 <code>terminate()</code> 安全取消</li>
+        <li><strong>WorkerMessageHandler</strong> — Worker 的入口，注册消息处理器</li>
+      </ul>
+
+      <div class="code-ref">
+        <div class="code-ref__header">
+          <span class="code-ref__path">lib/core/worker.js:76-93</span>
+        </div>
+        <pre><code><span class="kw">class</span> WorkerMessageHandler {
+  <span class="kw">static</span> <span class="fn">setup</span>(handler, port) {
+    handler.<span class="fn">on</span>(<span class="str">"test"</span>, data => {          <span class="cm">// ★ 传输协议测试</span>
+      handler.<span class="fn">send</span>(<span class="str">"test"</span>, data <span class="kw">instanceof</span> Uint8Array);
+    });
+    handler.<span class="fn">on</span>(<span class="str">"configure"</span>, data => {     <span class="cm">// ★ 日志级别配置</span>
+      (0, _util.setVerbosityLevel)(data.verbosity);
+    });
+    handler.<span class="fn">on</span>(<span class="str">"GetDocRequest"</span>, data => { <span class="cm">// ★ 核心：文档加载请求</span>
+      <span class="kw">return</span> WorkerMessageHandler.<span class="fn">createDocumentHandler</span>(data, port);
+    });
+  }
+}</code></pre>
+      </div>
+
+      <p><code>createDocumentHandler()</code> 在 Worker 中创建完整的 PDF 解析管线：<code>NetworkManager</code> → <code>LocalPdfManager</code> → <code>XRef</code> → <code>Catalog</code> → <code>PartialEvaluator</code>。它向主线程暴露以下 RPC 方法：</p>
+      <ul>
+        <li><code>GetOperatorList</code> — 获取页面的图形指令序列</li>
+        <li><code>GetTextContent</code> — 获取页面的文本内容（用于搜索和选择）</li>
+        <li><code>GetAnnotations</code> — 获取页面批注</li>
+        <li><code>RenderPage</code> — 直接请求 Worker 渲染（Node.js 模式）</li>
+        <li><code>GetData</code> / <code>SaveDocument</code> — PDF 数据读写</li>
+      </ul>
+
+      <div class="callout callout-insight">
+        <div class="callout-title">🧠 如果让你来实现 Worker 通信</div>
+        <p><strong>问题</strong>：主线程和 Worker 之间需要双向 RPC（请求-响应）。原生 postMessage 是单向消息传递，如何建立请求-响应的关联？</p>
+        <p><strong>直觉方案</strong>：每条消息带一个自增 ID，Worker 响应时带回相同 ID，主线程维护一个 pending 的 Promise Map。</p>
+        <p><strong>该库的实际做法</strong>：正是如此。但 pdf.js 额外实现了<strong>流式传输</strong>——对于 OperatorList 等大量数据，使用 <code>sendStreamRequest</code> 将数据分块传输，支持渐进而非一次性发送。这样主线程可以边接收边渲染，大幅降低首屏延迟。</p>
+        <p><strong>差异分析</strong>：直觉方案适用于请求-响应的 RPC，但不适合流式场景。pdf.js 的 MessageHandler 在基础 RPC 上增加了 <code>StreamSink</code> 抽象——Worker 可以分多次 <code>send</code> 同一个流的数据和完成信号，主线程通过 <code>ChunkedStream</code> 逐步读取。</p>
+      </div>
+    </section>
+
+    <section id="message">
+      <h2>三、MessageHandler — 双向 RPC 引擎</h2>
+      <p><code>lib/shared/message_handler.js</code></p>
+      <p>MessageHandler 封装了 <code>postMessage</code>，提供了：</p>
+      <ul>
+        <li><code>send(name, data, transfers)</code> — 发送消息（支持 Transferable）</li>
+        <li><code>sendWithPromise(name, data, transfers)</code> — 发送并返回 Promise</li>
+        <li><code>sendWithStream(name, data, transfers)</code> — 发送并返回可读流</li>
+        <li><code>on(name, callback)</code> — 注册消息处理器</li>
+      </ul>
+
+      <p>每个请求包含一个唯一的 <code>streamId</code>。当请求完成时，Worker 发送 <code>streamId: null</code> 表示流结束。主线程的 <code>MessageHandler</code> 通过 <code>PromiseCapability</code>（自实现的 Deferred）管理请求生命周期。</p>
+
+      <div class="callout callout-tip">
+        <div class="callout-title">💡 隐蔽但关键：Array.prototype 污染检测</div>
+        <p>在 <code>worker.js:110-116</code>，Worker 启动时会检查 <code>Array.prototype</code> 上是否存在可枚举属性。因为 <code>for...in</code> 遍历数组会被 polyfill 污染（例如 <code>core-js</code>），而 pdf.js 内部大量使用 TypedArray，数组原型被污染会导致灾难性的渲染错误。如果检测到污染，直接抛出错误。</p>
+      </div>
+    </section>
+
+    <section id="api">
+      <h2>四、API 层详解</h2>
+      <p><code>lib/display/api.js:83-200</code> — PDF.js 对外的门面</p>
+
+      <p><strong>入口函数 <code>getDocument(src)</code></strong>：</p>
+      <pre><code><span class="kw">function</span> <span class="fn">getDocument</span>(src) {
+  <span class="kw">const</span> task = <span class="kw">new</span> PDFDocumentLoadingTask();
+  <span class="kw">let</span> source;
+
+  <span class="kw">if</span> (<span class="kw">typeof</span> src === <span class="str">"string"</span> || src <span class="kw">instanceof</span> URL) {
+    source = { url: src };                <span class="cm">// ★ 支持 URL 字符串</span>
+  } <span class="kw">else if</span> ((0, _util.isArrayBuffer)(src)) {
+    source = { data: src };               <span class="cm">// ★ 支持 ArrayBuffer</span>
+  } <span class="kw">else if</span> (src <span class="kw">instanceof</span> PDFDataRangeTransport) {
+    source = { range: src };              <span class="cm">// ★ 支持 Range 请求（大文件流式加载）</span>
+  } <span class="kw">else</span> {
+    source = src;                         <span class="cm">// ★ 支持对象字面量（含 password, cMapUrl 等）</span>
+  }
+
+  <span class="kw">const</span> worker = <span class="kw">new</span> PDFWorker();           <span class="cm">// ★ 自动创建 Worker</span>
+  <span class="kw">const</span> params = { source, worker, ... };
+  <span class="kw">const</span> messageHandler = <span class="kw">new</span> MessageHandler(...);
+  messageHandler.<span class="fn">send</span>(<span class="str">"GetDocRequest"</span>, params);
+  <span class="kw">return</span> task;                           <span class="cm">// ★ 立即返回 loadingTask，DocumentProxy 在 .promise 中</span>
+}</code></pre>
+
+      <p><strong>核心代理对象</strong>：</p>
+      <table>
+        <tr><th>对象</th><th>职责</th><th>关键方法</th></tr>
+        <tr><td><code>PDFDocumentLoadingTask</code></td><td>加载任务句柄</td><td><code>.promise</code> → 等待加载完成；<code>.destroy()</code> → 取消加载</td></tr>
+        <tr><td><code>PDFDocumentProxy</code></td><td>文档代理（只暴露元数据和页面访问）</td><td><code>getPage()</code>、<code>numPages</code>、<code>getMetadata()</code></td></tr>
+        <tr><td><code>PDFPageProxy</code></td><td>页面代理</td><td><code>render()</code>、<code>getTextContent()</code>、<code>getAnnotations()</code></td></tr>
+        <tr><td><code>RenderTask</code></td><td>渲染任务句柄</td><td><code>.promise</code> → 等待渲染完成；<code>.cancel()</code> → 取消渲染</td></tr>
+      </table>
+
+      <div class="arch-highlight">
+        <h4>🏗️ 「Promise 代理」模式</h4>
+        <p>PDF.js 的 API 设计是经典的 Proxy 模式：用户代码永远不直接访问 Worker 内部对象。所有交互通过 <code>xxxProxy</code> 进行，这些 Proxy 内部封装了 MessageHandler 的 RPC 调用。这使得 API 层可以在不改变用户代码的情况下切换底层实现（例如从 Worker 模式切换到 LoopbackPort 同线程模式）。</p>
+      </div>
+    </section>
+
+    <section id="canvas">
+      <h2>五、CanvasGraphics — Canvas 渲染器</h2>
+      <p><code>lib/display/canvas.js:27 — 2810 行</code></p>
+      <p>CanvasGraphics 是 PDF.js 渲染管线的终端——它接收 OperatorList，按顺序执行每个操作码，最终在 Canvas 2D Context 上绘制出 PDF 内容。</p>
+
+      <p><strong>核心方法 <code>executeOperatorList()</code></strong>：</p>
+      <pre><code><span class="cm">// canvas.js 的执行循环（简化）</span>
+<span class="kw">const</span> EXECUTION_TIME = <span class="num">15</span>;     <span class="cm">// ★ 每帧最多执行 15ms</span>
+<span class="kw">const</span> EXECUTION_STEPS = <span class="num">10</span>;   <span class="cm">// ★ 每批最多 10 个操作符</span>
+
+<span class="fn">executeOperatorList</span>(operatorList, ...) {
+  <span class="kw">const</span> fnArray = operatorList.fnArray;   <span class="cm">// [OPS.xxx, OPS.yyy, ...]</span>
+  <span class="kw">const</span> argsArray = operatorList.argsArray; <span class="cm">// [[args], [args], ...]</span>
+
+  <span class="kw">let</span> i = <span class="num">0</span>;
+  <span class="kw">const</span> next = () => {
+    <span class="kw">const</span> startTime = Date.<span class="fn">now</span>();
+    <span class="kw">let</span> steps = <span class="num">0</span>;
+    <span class="kw">while</span> (i &lt; fnArray.length) {
+      <span class="kw">this</span>.<span class="fn">executeOp</span>(fnArray[i], argsArray[i]); <span class="cm">// ★ 执行单个操作</span>
+      i++;
+      steps++;
+      <span class="kw">if</span> (steps >= EXECUTION_STEPS && Date.<span class="fn">now</span>() - startTime > EXECUTION_TIME) {
+        <span class="kw">break</span>;  <span class="cm">// ★ 时间片用完，让出主线程</span>
+      }
+    }
+    <span class="kw">if</span> (i == fnArray.length) {
+      resolve(); <span class="cm">// 完成</span>
+    } <span class="kw">else</span> {
+      setTimeout(next, <span class="num">0</span>);  <span class="cm">// ★ 下一帧继续</span>
+    }
+  };
+  next();
+}</code></pre>
+
+      <p>这个<strong>时间片分块执行</strong>策略是 PDF.js 渲染不卡顿的核心原因。对于含数万个图形指令的复杂页面，它会自动拆分为多个微任务，确保每帧不超过 15ms 的渲染预算。</p>
+
+      <h3>操作符到 Canvas API 的映射</h3>
+      <table>
+        <tr><th>OPS 操作符</th><th>PDF 含义</th><th>Canvas API 映射</th></tr>
+        <tr><td><code>paintFormXObject</code></td><td>绘制表单 XObject（子内容流）</td><td>递归进入子 OperatorList</td></tr>
+        <tr><td><code>beginText</code> / <code>showText</code></td><td>开始文本 / 显示文本</td><td><code>ctx.fillText()</code> / <code>ctx.strokeText()</code></td></tr>
+        <tr><td><code>paintImageXObject</code></td><td>绘制图像</td><td><code>ctx.drawImage()</code></td></tr>
+        <tr><td><code>paintJpegXObject</code></td><td>JPEG 直接绘制</td><td><code>ctx.drawImage()</code>（零解码开销）</td></tr>
+        <tr><td><code>setFillRGBColor</code></td><td>设置填充色</td><td><code>ctx.fillStyle = ...</code></td></tr>
+        <tr><td><code>setGState</code></td><td>设置图形状态（透明度/混合模式）</td><td><code>ctx.globalAlpha</code> / <code>ctx.globalCompositeOperation</code></td></tr>
+        <tr><td><code>constructPath</code></td><td>构建路径</td><td><code>ctx.moveTo/lineTo/bezierCurveTo</code></td></tr>
+        <tr><td><code>paintSolidColorImageMask</code></td><td>1-bit 图像蒙版</td><td>先创建 ImageData，再 <code>putImageData</code></td></tr>
+      </table>
+
+      <div class="callout callout-warning">
+        <div class="callout-title">⚠️ 容易忽视的渲染细节</div>
+        <p><strong>JPEG 直通（JPEG Pass-through）</strong>：当 PDF 内嵌 JPEG 图像时，CanvasGraphics 不会先解码再重新编码——它直接将 JPEG 二进制数据传给 <code>ctx.drawImage()</code>（通过 <code>createImageBitmap</code> 或 Blob URL）。这避免了 JPEG 二次压缩的质量损失，也是 PDF.js 渲染质量媲美原生阅读器的原因之一。</p>
+        <p><strong>Canvas 镜像（Mirroring）</strong>：可选内容组（图层）的显示/隐藏通过「Canvas 镜像」实现——创建一个不可见的 Canvas 作为主 Canvas 的同步副本。所有绘制操作同时写入两个 Canvas，当用户切换图层时，只需显示/隐藏对应的 DOM Canvas 元素，无需重绘。</p>
+      </div>
+    </section>
+
+    <section id="layers">
+      <h2>六、TextLayer 和 AnnotationLayer</h2>
+      <p>PDF 渲染不只是像素绘制。为了支持文本选择、搜索和可访问性，PDF.js 在 Canvas 之上叠加了两个 DOM 层：</p>
+
+      <table>
+        <tr><th>图层</th><th>文件</th><th>职责</th></tr>
+        <tr><td><strong>TextLayer</strong></td><td><code>lib/display/text_layer.js</code><br/><code>lib/web/text_layer_builder.js</code></td><td>在 Canvas 上方创建透明的 &lt;span&gt; 元素，每个 &lt;span&gt; 精确定位到 Canvas 中对应字符的位置，允许用户选择和复制文本</td></tr>
+        <tr><td><strong>AnnotationLayer</strong></td><td><code>lib/display/annotation_layer.js</code><br/><code>lib/web/annotation_layer_builder.js</code></td><td>渲染链接、表单控件、高亮批注等交互元素。使用 HTML &lt;a&gt;、&lt;input&gt; 等原生元素，完全可访问</td></tr>
+        <tr><td><strong>XfaLayer</strong></td><td><code>lib/display/xfa_layer.js</code></td><td>XFA（XML Forms Architecture）表单渲染，将 Adobe LiveCycle 表单转换为 HTML</td></tr>
+      </table>
+
+      <p><strong>TextLayer 的核心挑战是坐标对齐</strong>：Canvas 中的文本位置使用 PDF 坐标系（原点在左下角，单位为 points），而 DOM 使用视口坐标系（原点在左上角，单位为 CSS pixels）。TextLayer 需要根据页面的缩放比例和变换矩阵精确计算每个 span 的 CSS <code>left/top/font-size</code>，使选择高亮与 Canvas 中的文本精确对齐。</p>
+
+      <div class="callout callout-insight">
+        <div class="callout-title">🧠 如果你来实现文本选择</div>
+        <p><strong>问题</strong>：Canvas 中的文本是像素，无法被浏览器选择。如何让用户选择和复制 PDF 中的文字？</p>
+        <p><strong>直觉方案</strong>：自己实现选择逻辑（鼠标拖拽 → 计算选中区域 → 提取对应文本）。</p>
+        <p><strong>该库的实际做法</strong>：在 Canvas 上方叠加透明的 HTML 元素，利用浏览器原生选择行为。这是一种巧妙的「用平台能力代替自己实现」的思路。</p>
+        <p><strong>差异分析</strong>：自己实现选择逻辑需要处理 RTL 文本、连字、换行等无数边界情况。叠加透明 DOM 虽然增加了坐标对齐的复杂性，但获得了免费的键盘导航、屏幕阅读器支持和国际化。</p>
+      </div>
+    </section>
+
+    <section id="svg">
+      <h2>七、SVG 渲染</h2>
+      <p><code>lib/display/svg.js — SVGGraphics</code></p>
+      <p>SVGGraphics 与 CanvasGraphics 共享相同的 OperatorList 输入，但输出是 SVG DOM 元素而非 Canvas 像素。这展示了 OperatorList 作为平台无关中间表示的价值。</p>
+      <p>SVG 渲染的每个操作符对应一个 SVG 元素：<code>showText</code> → <code>&lt;text&gt;</code>、<code>paintImageXObject</code> → <code>&lt;image&gt;</code>、路径操作 → <code>&lt;path&gt;</code>。</p>
+      <p>主要应用场景：Node.js 无 Canvas 环境的 PDF 渲染、需要矢量输出的打印场景。</p>
+    </section>
+
+    <section id="viewer">
+      <h2>八、Viewer UI 架构</h2>
+      <p><code>lib/web/ — 54 个文件</code></p>
+      <p>PDF.js 的默认 Viewer 是一个完整的单页应用（SPA），提供工具栏、侧边栏、缩略图、搜索、打印等功能。核心组件：</p>
+      <table>
+        <tr><th>组件</th><th>文件</th><th>职责</th></tr>
+        <tr><td><strong>PDFViewer</strong></td><td><code>pdf_viewer.js</code></td><td>页面容器：管理页面 DOM 的创建、滚动定位、可见性检测</td></tr>
+        <tr><td><strong>PDFPageView</strong></td><td><code>pdf_page_view.js</code></td><td>单页视图：管理 Canvas + TextLayer + AnnotationLayer 的组合</td></tr>
+        <tr><td><strong>PDFRenderingQueue</strong></td><td><code>pdf_rendering_queue.js</code></td><td>渲染队列：优先渲染可见页面，取消滚动出视口的页面渲染</td></tr>
+        <tr><td><strong>PDFFindController</strong></td><td><code>pdf_find_controller.js</code></td><td>搜索控制器：利用 Worker 端的文本提取实现全文搜索</td></tr>
+        <tr><td><strong>PDFLinkService</strong></td><td><code>pdf_link_service.js</code></td><td>链接服务：处理 PDF 内部链接导航和外部链接</td></tr>
+        <tr><td><strong>PDFThumbnailViewer</strong></td><td><code>pdf_thumbnail_viewer.js</code></td><td>缩略图：使用小尺寸 Canvas 渲染预览</td></tr>
+        <tr><td><strong>DownloadManager</strong></td><td><code>download_manager.js</code></td><td>下载管理：通过 Blob URL 实现 PDF 下载</td></tr>
+        <tr><td><strong>EventBus</strong></td><td><code>ui_utils.js</code></td><td>事件总线：组件间松耦合通信</td></tr>
+      </table>
+
+      <div class="callout callout-tip">
+        <div class="callout-title">💡 Viewer 的松耦合设计</div>
+        <p>Viewer 的各组件通过 <code>EventBus</code> 通信，互相不直接引用。这意味着你可以轻松替换任何一个组件——例如用自定义的搜索 UI 替换 <code>PDFFindBar</code>，只需监听相同的事件即可。这种基于事件的架构在 MVC 框架流行之前是前端架构的经典范式。</p>
+      </div>
+    </section>
+
+    <section id="perf">
+      <h2>九、性能优化策略总结</h2>
+      <table>
+        <tr><th>策略</th><th>实现位置</th><th>效果</th></tr>
+        <tr><td><strong>时间片渲染</strong></td><td>CanvasGraphics.executeOperatorList()</td><td>每帧最多 15ms，避免长任务阻塞 UI</td></tr>
+        <tr><td><strong>可见性驱动渲染</strong></td><td>PDFRenderingQueue</td><td>只渲染视口内的页面，滚动时取消不可见页</td></tr>
+        <tr><td><strong>Transferable Objects</strong></td><td>MessageHandler</td><td>OperatorList 和图像数据零拷贝传输</td></tr>
+        <tr><td><strong>JPEG 直通</strong></td><td>CanvasGraphics</td><td>避免 JPEG 二次编解码，零质量损失</td></tr>
+        <tr><td><strong>字体代理（Font Face）</strong></td><td>FontLoader</td><td>将 PDF 字体注册为 CSS @font-face，利用浏览器原生文字渲染</td></tr>
+        <tr><td><strong>Canvas 镜像</strong></td><td>mirrorContextOperations()</td><td>图层切换零重绘开销</td></tr>
+        <tr><td><strong>渐进渲染</strong></td><td>OperatorList 依赖标记</td><td>文本先渲染，图像异步加载完成后补绘</td></tr>
+      </table>
+    </section>
+
+    <footer class="page-footer">
+      <a href="module-parsing.html">← PDF 解析核心链路</a>
+      <a href="module-fonts-streams.html">下一章：字体系统与流编解码 →</a>
+    </footer>
+  </main>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'default'});</script>
+</body>
+</html>

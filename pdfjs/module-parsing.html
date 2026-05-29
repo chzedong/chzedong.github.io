@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF.js 深度解析 — PDF 解析核心链路</title>
+  <style>
+    :root {
+      --color-bg: #ffffff; --color-bg-secondary: #f8f9fa; --color-bg-tertiary: #f1f3f5;
+      --color-text: #1a1a2e; --color-text-secondary: #495057; --color-text-muted: #868e96;
+      --color-border: #dee2e6; --color-border-light: #e9ecef;
+      --color-primary: #2563eb; --color-primary-light: #eff6ff; --color-primary-dark: #1d4ed8;
+      --color-accent: #7c3aed; --color-accent-light: #f5f3ff;
+      --color-success: #059669; --color-success-bg: #ecfdf5;
+      --color-warning: #d97706; --color-warning-bg: #fffbeb;
+      --color-danger: #dc2626; --color-danger-bg: #fef2f2;
+      --color-info: #0891b2; --color-info-bg: #ecfeff;
+      --color-code-bg: #f1f5f9; --color-code-text: #1e293b;
+      --color-inline-code-bg: #f1f5f9; --color-inline-code-text: #e11d48;
+      --sidebar-width: 260px; --max-content-width: 860px;
+      --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
+      --font-mono: "SF Mono", "Fira Code", "Fira Mono", "Consolas", monospace;
+      --radius: 8px; --shadow-sm: 0 1px 2px rgba(0,0,0,0.05); --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07); --transition: 150ms ease;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --color-bg: #0f172a; --color-bg-secondary: #1e293b; --color-bg-tertiary: #334155;
+        --color-text: #e2e8f0; --color-text-secondary: #94a3b8; --color-text-muted: #64748b;
+        --color-border: #334155; --color-border-light: #1e293b;
+        --color-primary: #3b82f6; --color-primary-light: #1e3a5f; --color-primary-dark: #60a5fa;
+        --color-accent: #8b5cf6; --color-accent-light: #2e1065;
+        --color-code-bg: #1e293b; --color-code-text: #e2e8f0;
+        --color-inline-code-bg: #334155; --color-inline-code-text: #f87171;
+      }
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth;scroll-padding-top:20px}
+    body{font-family:var(--font-sans);font-size:15px;line-height:1.7;color:var(--color-text);background:var(--color-bg);-webkit-font-smoothing:antialiased}
+    .layout{display:flex;min-height:100vh}
+    .sidebar{position:fixed;top:0;left:0;width:var(--sidebar-width);height:100vh;background:var(--color-bg-secondary);border-right:1px solid var(--color-border);overflow-y:auto;padding:24px 20px;z-index:100}
+    .sidebar-header{font-size:13px;font-weight:600;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--color-border)}
+    .sidebar-title{font-size:16px;font-weight:700;color:var(--color-text);margin-bottom:20px;line-height:1.3}
+    .sidebar-title a{color:inherit;text-decoration:none}
+    .sidebar-nav{list-style:none}
+    .sidebar-nav li{margin-bottom:2px}
+    .sidebar-nav a{display:block;padding:6px 12px;border-radius:6px;color:var(--color-text-secondary);text-decoration:none;font-size:14px;transition:all var(--transition)}
+    .sidebar-nav a:hover{background:var(--color-bg-tertiary);color:var(--color-text)}
+    .sidebar-nav a.active{background:var(--color-primary-light);color:var(--color-primary);font-weight:600}
+    .sidebar-nav .sub-nav{padding-left:16px}
+    .sidebar-nav .sub-nav a{font-size:13px}
+    .main{margin-left:var(--sidebar-width);flex:1;max-width:var(--max-content-width);padding:48px 56px 80px}
+    .page-header{margin-bottom:40px;padding-bottom:32px;border-bottom:1px solid var(--color-border)}
+    .page-header h1{font-size:32px;font-weight:800;line-height:1.2;color:var(--color-text);margin-bottom:12px;letter-spacing:-0.02em}
+    .page-header .subtitle{font-size:17px;color:var(--color-text-secondary);line-height:1.6;margin-bottom:16px}
+    .badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+    .badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:500;background:var(--color-bg-tertiary);color:var(--color-text-secondary)}
+    .badge-primary{background:var(--color-primary-light);color:var(--color-primary)}
+    .badge-accent{background:var(--color-accent-light);color:var(--color-accent)}
+    section{margin-bottom:48px}
+    section h2{font-size:24px;font-weight:700;color:var(--color-text);margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid var(--color-border-light);letter-spacing:-0.01em}
+    section h3{font-size:19px;font-weight:600;color:var(--color-text);margin-top:28px;margin-bottom:12px}
+    section h4{font-size:16px;font-weight:600;color:var(--color-text-secondary);margin-top:20px;margin-bottom:8px}
+    section p{margin-bottom:14px;color:var(--color-text-secondary)}
+    section ul,section ol{margin-bottom:14px;padding-left:24px;color:var(--color-text-secondary)}
+    section li{margin-bottom:6px}
+    section a{color:var(--color-primary);text-decoration:none}
+    section a:hover{text-decoration:underline}
+    code{font-family:var(--font-mono);font-size:13px;background:var(--color-inline-code-bg);color:var(--color-inline-code-text);padding:2px 6px;border-radius:4px}
+    pre{background:var(--color-code-bg);color:var(--color-code-text);border-radius:var(--radius);padding:20px 24px;overflow-x:auto;margin-bottom:18px;border:1px solid var(--color-border-light);font-size:13px;line-height:1.6}
+    pre code{background:none;color:inherit;padding:0;font-size:inherit}
+    .kw{color:#7c3aed;font-weight:600}
+    .str{color:#059669}
+    .num{color:#d97706}
+    .cm{color:#868e96;font-style:italic}
+    .fn{color:#2563eb}
+    @media (prefers-color-scheme: dark){.kw{color:#a78bfa}.str{color:#34d399}.num{color:#fbbf24}.cm{color:#64748b}.fn{color:#60a5fa}}
+    .callout{padding:16px 20px;border-radius:var(--radius);margin-bottom:18px;border-left:4px solid;font-size:14px}
+    .callout-title{font-weight:600;margin-bottom:4px}
+    .callout-info{background:var(--color-info-bg);border-color:var(--color-info)}
+    .callout-tip{background:var(--color-success-bg);border-color:var(--color-success)}
+    .callout-warning{background:var(--color-warning-bg);border-color:var(--color-warning)}
+    .callout-insight{background:var(--color-accent-light);border-color:var(--color-accent)}
+    .code-ref{border:1px solid var(--color-border);border-radius:var(--radius);margin-bottom:20px;overflow:hidden}
+    .code-ref__header{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:var(--color-bg-tertiary);border-bottom:1px solid var(--color-border-light);font-size:12px}
+    .code-ref__path{font-family:var(--font-mono);color:var(--color-text-muted);font-weight:500}
+    .code-ref pre{margin:0;border:none;border-radius:0}
+    table{width:100%;border-collapse:collapse;margin-bottom:18px;font-size:14px}
+    th,td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--color-border-light)}
+    th{font-weight:600;color:var(--color-text);background:var(--color-bg-secondary);font-size:13px;text-transform:uppercase;letter-spacing:0.03em}
+    td{color:var(--color-text-secondary)}
+    tr:hover td{background:var(--color-bg-secondary)}
+    .mermaid-caption{text-align:center;color:var(--color-text-muted);font-size:13px;margin-top:-10px;margin-bottom:20px}
+    .page-footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--color-border);display:flex;justify-content:space-between;align-items:center}
+    .page-footer a{color:var(--color-primary);text-decoration:none;font-weight:600}
+    .page-footer a:hover{text-decoration:underline}
+    .arch-highlight{padding:20px 24px;border-radius:var(--radius);background:var(--color-accent-light);border-left:4px solid var(--color-accent);margin-bottom:20px}
+    .arch-highlight h4{margin-top:0;color:var(--color-accent)}
+  </style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-header">PDF.js 深度解析</div>
+    <div class="sidebar-title"><a href="index.html">← 项目总览</a></div>
+    <ul class="sidebar-nav">
+      <li><a href="#overview" class="active">数据流总览</a></li>
+      <li><a href="#pdf-structure">PDF 文件结构</a></li>
+      <li><a href="#lexer">Lexer 词法分析</a></li>
+      <li><a href="#parser">Parser 语法解析</a></li>
+      <li><a href="#xref">XRef 交叉引用</a></li>
+      <li><a href="#catalog">Catalog 目录</a></li>
+      <li><a href="#evaluator">PartialEvaluator</a></li>
+      <li><a href="#operatorlist">OperatorList 中间表示</a></li>
+      <li><a href="#design">设计模式与对比</a></li>
+      <li class="sub-nav">
+        <a href="index.html">🏠 项目总览</a>
+        <a href="module-rendering.html">🎨 渲染管线</a>
+        <a href="module-fonts-streams.html">🔤 字体与流</a>
+      </li>
+    </ul>
+  </aside>
+  <main class="main">
+    <header class="page-header">
+      <h1>📄 PDF 解析核心链路</h1>
+      <p class="subtitle">从二进制字节流到结构化算子列表的完整路径。<br>覆盖 Lexer、Parser、XRef、Catalog、PartialEvaluator 五大核心模块。</p>
+      <div class="badges">
+        <span class="badge badge-primary">lib/core/</span>
+        <span class="badge badge-accent">~25,000 行</span>
+        <span class="badge">parser.js: 1399行</span>
+        <span class="badge">evaluator.js: 4610行</span>
+      </div>
+    </header>
+
+    <section id="overview">
+      <h2>一、数据流总览</h2>
+      <p>PDF 解析是从原始字节到结构化数据的过程，可以类比为编译原理中的「词法分析 → 语法分析 → 语义分析 → 中间代码生成」。PDF.js 的核心解析管线如下：</p>
+      <pre class="mermaid">
+flowchart TD
+    A["📦 原始 PDF 字节<br/>%PDF-1.4 ... %%EOF"] --> B["🔤 Lexer<br/>getObj() → Name / Num / Cmd"]
+    B --> C["🌳 Parser<br/>递归下降解析数组/字典/流"]
+    C --> D["📋 XRef<br/>parse() → 构建对象索引"]
+    D --> E["📖 Catalog<br/>getPage() → 定位页面字典"]
+    E --> F["⚙️ PartialEvaluator<br/>getOperatorList() → 执行内容流"]
+    F --> G["📜 OperatorList<br/>[OPS.paintFormXObject, ...]"]
+
+    B -.->|引用| H["Stream / BaseStream<br/>解码压缩数据"]
+    D -.->|读取| H
+    F -.->|解码| H
+
+    style A fill:#fef2f2,stroke:#dc2626
+    style G fill:#ecfdf5,stroke:#059669
+    style H fill:#f5f3ff,stroke:#7c3aed
+      </pre>
+      <p class="mermaid-caption">图：PDF 解析数据流——红色是原始输入，绿色是最终输出，紫色是跨阶段使用的流解码器</p>
+    </section>
+
+    <section id="pdf-structure">
+      <h2>二、PDF 文件结构速览</h2>
+      <p>理解 PDF.js 的解析逻辑，首先要理解 PDF 文件本身的四段结构：</p>
+      <pre><code><span class="cm"># 1. 文件头</span>
+%PDF-<span class="num">1.4</span>
+
+<span class="cm"># 2. 对象集合（Body）</span>
+<span class="num">1</span> <span class="num">0</span> obj
+&lt;&lt; /Type /Catalog /Pages <span class="num">2</span> <span class="num">0</span> R &gt;&gt;
+endobj
+
+<span class="num">2</span> <span class="num">0</span> obj
+&lt;&lt; /Type /Pages /Kids [<span class="num">3</span> <span class="num">0</span> R] /Count <span class="num">1</span> &gt;&gt;
+endobj
+
+<span class="num">3</span> <span class="num">0</span> obj
+&lt;&lt; /Type /Page /Parent <span class="num">2</span> <span class="num">0</span> R /Contents <span class="num">4</span> <span class="num">0</span> R /MediaBox [<span class="num">0</span> <span class="num">0</span> <span class="num">612</span> <span class="num">792</span>] &gt;&gt;
+endobj
+
+<span class="num">4</span> <span class="num">0</span> obj
+&lt;&lt; /Length <span class="num">44</span> &gt;&gt;
+stream
+BT /F1 <span class="num">12</span> Tf <span class="num">100</span> <span class="num">700</span> Td (Hello PDF) Tj ET
+endstream
+endobj
+
+<span class="cm"># 3. 交叉引用表（XRef）</span>
+xref
+<span class="num">0</span> <span class="num">5</span>
+<span class="num">0000000000</span> <span class="num">65535</span> f 
+<span class="num">0000000015</span> <span class="num">00000</span> n 
+...
+
+<span class="cm"># 4. 文件尾（Trailer）</span>
+trailer
+&lt;&lt; /Size <span class="num">5</span> /Root <span class="num">1</span> <span class="num">0</span> R &gt;&gt;
+startxref
+<span class="num">492</span>
+%%EOF</code></pre>
+      <div class="callout callout-info">
+        <div class="callout-title">📌 PDF 的核心抽象</div>
+        <p>PDF 文件本质是一个<strong>对象数据库</strong>：通过交叉引用表（XRef）定位每个对象在文件中的字节偏移，通过 Trailer 找到根对象（Catalog），再通过字典引用（<code>/Pages 2 0 R</code>）遍历整个对象图。</p>
+      </div>
+    </section>
+
+    <section id="lexer">
+      <h2>三、Lexer — 词法分析器</h2>
+      <p><code>lib/core/parser.js:73</code></p>
+      <p>Lexer 是解析的第一阶段，将原始字节序列化为 <code>Name</code>、<code>Num</code>、<code>String</code>、<code>Cmd</code> 等 PDF 基本 Token。它不关心语义——只回答「下一个 Token 是什么」。</p>
+
+      <p><strong>核心设计：两字符前瞻（two-token lookahead）</strong>。Parser 通过 <code>buf1</code> 和 <code>buf2</code> 维护当前 Token 和下一个 Token 的缓冲区，这允许它在遇到 <code>&lt;&lt;</code>（字典开始）时立即切换到字典解析模式。</p>
+
+      <div class="code-ref">
+        <div class="code-ref__header">
+          <span class="code-ref__path">lib/core/parser.js:73-101</span>
+        </div>
+        <pre><code><span class="kw">class</span> Parser {
+  <span class="fn">constructor</span>({ lexer, xref, allowStreams = <span class="kw">false</span>, recoveryMode = <span class="kw">false</span> }) {
+    <span class="kw">this</span>.lexer = lexer;
+    <span class="kw">this</span>.xref = xref;
+    <span class="kw">this</span>.allowStreams = allowStreams;
+    <span class="kw">this</span>.recoveryMode = recoveryMode;
+    <span class="kw">this</span>.<span class="fn">refill</span>();  <span class="cm">// ★ 预取前两个 Token</span>
+  }
+
+  <span class="fn">refill</span>() {
+    <span class="kw">this</span>.buf1 = <span class="kw">this</span>.lexer.<span class="fn">getObj</span>();
+    <span class="kw">this</span>.buf2 = <span class="kw">this</span>.lexer.<span class="fn">getObj</span>();
+  }
+
+  <span class="fn">shift</span>() {
+    <span class="kw">if</span> (<span class="kw">this</span>.buf2 <span class="kw">instanceof</span> Cmd && <span class="kw">this</span>.buf2.cmd === <span class="str">"ID"</span>) {
+      <span class="kw">this</span>.buf1 = <span class="kw">this</span>.buf2;  <span class="cm">// ★ 内联图像特殊处理</span>
+      <span class="kw">this</span>.buf2 = <span class="kw">null</span>;
+    } <span class="kw">else</span> {
+      <span class="kw">this</span>.buf1 = <span class="kw">this</span>.buf2;
+      <span class="kw">this</span>.buf2 = <span class="kw">this</span>.lexer.<span class="fn">getObj</span>();
+    }
+  }
+}</code></pre>
+      </div>
+
+      <div class="callout callout-insight">
+        <div class="callout-title">🧠 如果让你来实现 Lexer</div>
+        <p><strong>问题</strong>：PDF 的 Token 类型边界由空格、括号、尖括号等分隔符决定。如何高效地从字节流中提取 Token？</p>
+        <p><strong>直觉方案</strong>：逐字节扫描，状态机切换模式（normal/string/hex/name）。</p>
+        <p><strong>该库的实际做法</strong>：确实使用状态机，但额外实现了「inline image 的 back-channel」——遇到 <code>BI</code>（Begin Image）命令时，Lexer 不尝试解析图像数据（那可能是二进制乱码），而是原样返回后续字节，由 Parser 调用专门的 <code>makeInlineImage()</code> 处理。这是一种<strong>「解析器指导词法分析器」</strong>的反向控制流。</p>
+        <p><strong>差异分析</strong>：如果 Lexer 独立处理内联图像，需要知道图像数据何时结束（即遇到 <code>EI</code> 标记）。但在图像二进制数据中 <code>EI</code> 字节序列可能自然出现，导致误匹配。PDF.js 的做法是把图像边界的判断权交给更上层的 Parser，避免了 Lexer 层面的假阳性。</p>
+      </div>
+    </section>
+
+    <section id="parser">
+      <h2>四、Parser — 递归下降解析器</h2>
+      <p><code>lib/core/parser.js:116-320</code></p>
+      <p>Parser 的核心方法是 <code>getObj()</code>，它是一个递归下降解析器：根据当前 Token 类型调度到不同的解析分支。PDF 的数据结构（数组、字典、流、间接引用）天然适合递归解析。</p>
+
+      <pre><code><span class="cm">// parser.js: getObj() 的核心调度逻辑（简化）</span>
+<span class="fn">getObj</span>(cipherTransform = <span class="kw">null</span>) {
+  <span class="kw">const</span> buf1 = <span class="kw">this</span>.buf1;
+  <span class="kw">this</span>.<span class="fn">shift</span>();
+
+  <span class="kw">if</span> (buf1 <span class="kw">instanceof</span> Cmd) {
+    <span class="kw">switch</span> (buf1.cmd) {
+      <span class="kw">case</span> <span class="str">"BI"</span>:         <span class="kw">return</span> <span class="kw">this</span>.<span class="fn">makeInlineImage</span>(...);   <span class="cm">// 内联图像</span>
+      <span class="kw">case</span> <span class="str">"["</span>:           <span class="kw">return</span> <span class="kw">this</span>.<span class="fn">parseArray</span>(...);         <span class="cm">// 数组</span>
+      <span class="kw">case</span> <span class="str">"<<"</span>:          <span class="kw">return</span> <span class="kw">this</span>.<span class="fn">parseDict</span>(...);          <span class="cm">// 字典</span>
+      <span class="kw">case</span> <span class="str">"stream"</span>:     <span class="kw">return</span> <span class="kw">this</span>.<span class="fn">parseStream</span>(...);        <span class="cm">// 流</span>
+      <span class="kw">case</span> <span class="str">"endobj"</span>:     <span class="kw">return</span> <span class="kw">null</span>;                       <span class="cm">// 对象结束</span>
+    }
+  }
+
+  <span class="kw">if</span> (buf1 <span class="kw">instanceof</span> Num) {
+    <span class="kw">const</span> num = buf1;
+    <span class="kw">const</span> gen = <span class="kw">this</span>.buf1;
+    <span class="kw">if</span> (gen <span class="kw">instanceof</span> Num && <span class="kw">this</span>.buf2 <span class="kw">instanceof</span> Cmd
+        && <span class="kw">this</span>.buf2.cmd === <span class="str">"R"</span>) {
+      <span class="cm">// ★ "1 0 R" = 间接引用（ref）</span>
+      <span class="kw">this</span>.<span class="fn">shift</span>(); <span class="kw">this</span>.<span class="fn">shift</span>();
+      <span class="kw">return</span> Ref.<span class="fn">get</span>(num, gen);
+    }
+    <span class="kw">return</span> num;
+  }
+
+  <span class="kw">if</span> (buf1 <span class="kw">instanceof</span> Name) <span class="kw">return</span> buf1;
+  <span class="kw">if</span> (<span class="kw">typeof</span> buf1 === <span class="str">"string"</span>) <span class="kw">return</span> buf1;
+}</code></pre>
+
+      <p>这个递归下降结构让 Parser 能自然处理嵌套结构：<code>[ 1 0 R &lt;&lt; /A [ 2 0 R ] &gt;&gt; ]</code>——解析时会递归进入数组和字典。</p>
+
+      <div class="callout callout-tip">
+        <div class="callout-title">💡 设计亮点：错误恢复（Recovery Mode）</div>
+        <p>PDF 文件常常不完美（由各种 PDF 生成器产生）。Parser 支持 <code>recoveryMode</code>：当遇到 EOF 时，不立即抛出异常，而是尝试返回已解析的部分结果。这在处理损坏的 PDF 时至关重要。</p>
+      </div>
+    </section>
+
+    <section id="xref">
+      <h2>五、XRef — 交叉引用表</h2>
+      <p><code>lib/core/xref.js:41-200</code></p>
+      <p>XRef 是 PDF 的「对象目录」。每个 PDF 对象都有唯一的对象编号（object number）和代数（generation），XRef 存储了每个对象在文件中的字节偏移。</p>
+      <p><strong>核心结构</strong>：</p>
+      <ul>
+        <li><code>entries[]</code> — 对象入口数组，每个入口包含 <code>{ offset, gen, uncompressed }</code></li>
+        <li><code>_cacheMap</code> — 已解析对象的 Map 缓存，避免重复解析</li>
+        <li><code>_pendingRefs</code> — 正在解析中的引用集合（防止循环引用）</li>
+      </ul>
+
+      <p><code>parse()</code> 方法的工作流程：</p>
+      <ol>
+        <li>从文件尾 <code>startxref</code> 找到交叉引用表的偏移量</li>
+        <li><code>readXRef()</code> 解析传统 XRef 表或 XRef 流</li>
+        <li>回退到 <code>indexObjects()</code>（在全文件扫描所有 <code>obj ... endobj</code>）——仅在 recoveryMode 下</li>
+        <li>提取 Trailer 字典中的 <code>/Root</code>（Catalog 引用）和 <code>/Encrypt</code>（加密信息）</li>
+      </ol>
+
+      <div class="code-ref">
+        <div class="code-ref__header">
+          <span class="code-ref__path">lib/core/xref.js:69-98</span>
+        </div>
+        <pre><code><span class="fn">parse</span>(recoveryMode = <span class="kw">false</span>) {
+  <span class="kw">let</span> trailerDict;
+  <span class="kw">if</span> (!recoveryMode) {
+    trailerDict = <span class="kw">this</span>.<span class="fn">readXRef</span>();      <span class="cm">// 正常路径：读 XRef 表</span>
+  } <span class="kw">else</span> {
+    (0, _util.warn)(<span class="str">"Indexing all PDF objects"</span>);
+    trailerDict = <span class="kw">this</span>.<span class="fn">indexObjects</span>();  <span class="cm">// ★ 恢复路径：全文件扫描</span>
+  }
+
+  trailerDict.<span class="fn">assignXref</span>(<span class="kw">this</span>);
+  <span class="kw">this</span>.trailer = trailerDict;
+
+  <span class="kw">let</span> encrypt;
+  <span class="kw">try</span> {
+    encrypt = trailerDict.<span class="fn">get</span>(<span class="str">"Encrypt"</span>);   <span class="cm">// ★ 检查 PDF 是否加密</span>
+  } <span class="kw">catch</span> (ex) { ... }
+
+  <span class="kw">if</span> (encrypt <span class="kw">instanceof</span> Dict) {
+    <span class="cm">// 提取加密参数，创建 CipherTransformFactory</span>
+    <span class="kw">this</span>.encrypt = <span class="kw">new</span> CipherTransformFactory(encrypt, fileId, <span class="kw">this</span>.pdfManager.password);
+  }
+
+  <span class="kw">let</span> root = trailerDict.<span class="fn">get</span>(<span class="str">"Root"</span>);       <span class="cm">// 获取 Catalog 引用</span>
+  <span class="kw">if</span> (root <span class="kw">instanceof</span> Dict) {
+    <span class="kw">const</span> pages = root.<span class="fn">get</span>(<span class="str">"Pages"</span>);
+    <span class="kw">if</span> (pages <span class="kw">instanceof</span> Dict) <span class="kw">return</span>;
+  }
+}</code></pre>
+      </div>
+
+      <div class="arch-highlight">
+        <h4>🏗️ 架构洞察：惰性加载（Lazy Loading）</h4>
+        <p>XRef 只存储偏移量，不立即解析对象内容。只有当代码通过 <code>xref.fetch(ref)</code> 访问某个对象时，才会从文件流中读取并解析。这是 PDF.js 能处理超大 PDF 的关键——它可以只加载当前页面需要的对象（字体、图像、内容流），而不需要将整个文件读入内存。</p>
+      </div>
+    </section>
+
+    <section id="catalog">
+      <h2>六、Catalog — 文档目录树</h2>
+      <p><code>lib/core/catalog.js:59-180</code></p>
+      <p>Catalog 是 PDF 文档的「根节点」。它从 Trailer 的 <code>/Root</code> 引用开始，构建出完整的页面树。Catalog 不仅提供页面访问，还管理：</p>
+      <ul>
+        <li><strong>页面树遍历</strong> — <code>getPage()</code> / <code>getPageIndex()</code></li>
+        <li><strong>缓存管理</strong> — <code>fontCache</code>、<code>builtInCMapCache</code>、<code>standardFontDataCache</code></li>
+        <li><strong>文档元数据</strong> — 版本号、语言、表单（AcroForm）、大纲、附件</li>
+        <li><strong>可选内容组</strong> — 图层的显示/隐藏</li>
+      </ul>
+
+      <div class="callout callout-insight">
+        <div class="callout-title">🧠 如果让你来实现页面树遍历</div>
+        <p><strong>问题</strong>：PDF 的页面结构是一个树（Pages 节点可以有子 Pages 和 Page节点），如何根据页号快速定位？</p>
+        <p><strong>直觉方案</strong>：遍历树建立 page-index → page-ref 的映射表。</p>
+        <p><strong>该库的实际做法</strong>：使用 <code>pageKidsCountCache</code>（以 RefSetCache 实现）缓存每个 Pages 节点的子页面数。通过二分查找在树中定位目标页，避免全树遍历。同时 <code>pageIndexCache</code> 缓存已计算的页面索引。</p>
+        <p><strong>差异分析</strong>：直觉方案在 10000 页的 PDF 中需要遍历所有节点，O(n) 复杂度。实际方案利用子页面计数的缓存实现 O(log n) 的树搜索，大幅减少了大型文档的定位开销。</p>
+      </div>
+    </section>
+
+    <section id="evaluator">
+      <h2>七、PartialEvaluator — 内容流求值引擎</h2>
+      <p><code>lib/core/evaluator.js:27 — 4610 行，PDF.js 中最复杂的模块</code></p>
+      <p>PartialEvaluator 是解析链路的最后一环，它的输入是页面内容流（经过解码的 PDF 图形操作序列），输出是 <strong>OperatorList</strong>（平台无关的图形指令序列）。</p>
+
+      <p><strong>工作流程</strong>：</p>
+      <ol>
+        <li><code>getOperatorList()</code> 接收页面内容流</li>
+        <li>内部再次调用 Parser 解析内容流中的 PDF 图形操作符</li>
+        <li><code>EvaluatorPreprocessor</code> 预处理操作符（处理 <code>q/Q</code> 图形状态保存/恢复）</li>
+        <li>对每个操作符分派到对应的 <code>op_xxx</code> 处理函数</li>
+        <li>处理函数将其翻译为 <code>OperatorList</code> 条目</li>
+      </ol>
+
+      <pre><code><span class="cm">// evaluator.js 中的操作符分派表（简化的 OPS 常量）</span>
+<span class="kw">const</span> OPS = {
+  <span class="fn">paintFormXObject</span>: <span class="num">0</span>,
+  <span class="fn">beginText</span>: <span class="num">1</span>,
+  <span class="fn">setFont</span>: <span class="num">2</span>,
+  <span class="fn">showText</span>: <span class="num">3</span>,
+  <span class="fn">paintImageXObject</span>: <span class="num">4</span>,
+  <span class="fn">paintInlineImageXObject</span>: <span class="num">5</span>,
+  <span class="fn">setFillColor</span>: <span class="num">6</span>,
+  <span class="fn">setStrokeColor</span>: <span class="num">7</span>,
+  <span class="fn">setLineWidth</span>: <span class="num">8</span>,
+  <span class="cm">// ... 共 100+ 个操作符</span>
+};
+
+<span class="cm">// 对 PDF 操作符 "Tj"（show text）的处理映射</span>
+<span class="kw">case</span> <span class="str">"Tj"</span>: {   <span class="cm">// 显示文本字符串</span>
+  <span class="kw">const</span> text = getTextContent();    <span class="cm">// ★ 从字体编码提取 Unicode</span>
+  operatorList.<span class="fn">addOp</span>(OPS.showText, [text, fontName, fontSize, matrix]);
+  <span class="kw">break</span>;
+}</code></pre>
+
+      <div class="callout callout-warning">
+        <div class="callout-title">⚠️ 性能关键：为何叫 "Partial" Evaluator</div>
+        <p>PDF 内容流中的 Form XObject 可以引用其他页面资源。PartialEvaluator 在遇到它们时不立即求值，而是将其延迟到渲染阶段（CanvasGraphics 中）。这种<strong>部分求值</strong>策略避免了过早展开导致的内存爆炸，同时允许渲染器根据视口裁剪决定是否跳过不可见元素。</p>
+      </div>
+    </section>
+
+    <section id="operatorlist">
+      <h2>八、OperatorList — 平台无关的中间表示</h2>
+      <p><code>lib/core/operator_list.js</code></p>
+      <p>OperatorList 是一个简单的线性数据结构：<code>[opCode, arg1, arg2, ..., opCode, arg1, ...]</code>。每个操作码后跟零个或多个参数。它是 Worker 线程和主线程之间的传输格式。</p>
+
+      <table>
+        <tr><th>设计特性</th><th>实现</th><th>优势</th></tr>
+        <tr><td>紧凑性</td><td>使用数字操作码（OPS 枚举）而非字符串</td><td>减少 postMessage 序列化开销</td></tr>
+        <tr><td>可传输性</td><td>使用 Transferable Objects（TypedArray）传递图像数据</td><td>零内存拷贝，大幅提升大图传输性能</td></tr>
+        <tr><td>平台无关性</td><td>不包含任何 Canvas/DOM 特定操作</td><td>同一份 OpsList 可在 Canvas、SVG、Node.js 中渲染</td></tr>
+        <tr><td>可分块性</td><td>支持 <code>addDependency()</code> 标记需要异步加载的资源</td><td>支持渐进式渲染——先画文本，图像加载完成后再补绘</td></tr>
+      </table>
+
+      <div class="arch-highlight">
+        <h4>🏗️ 为什么选择线性列表而非 AST？</h4>
+        <p>PDF 的图形操作本质上是顺序指令（类似 PS/PDF 操作符）。线性 OperatorList 比 AST 更适合这个场景：</p>
+        <ul>
+          <li>渲染器只需顺序遍历，不需要递归遍历树</li>
+          <li>序列化更简单，适合 postMessage 传输</li>
+          <li>可以轻松打断/恢复（按时间片分块渲染，避免长任务阻塞主线程）</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="design">
+      <h2>九、设计模式总结</h2>
+      <table>
+        <tr><th>模式</th><th>应用位置</th><th>为何选择</th></tr>
+        <tr><td><strong>递归下降解析器</strong></td><td>Parser.getObj()</td><td>PDF 的嵌套结构（数组/字典/流）天然适合递归下降</td></tr>
+        <tr><td><strong>享元模式（Flyweight）</strong></td><td>Name、Cmd、Ref 使用静态缓存工厂</td><td>PDF 中名称和命令重复率极高，共享实例节省内存（如 /Type 出现数千次）</td></tr>
+        <tr><td><strong>惰性加载（Lazy）</strong></td><td>XRef.fetch()</td><td>按需加载对象，避免大型 PDF 全部加载到内存</td></tr>
+        <tr><td><strong>代理模式（Proxy）</strong></td><td>LocalPdfManager / NetworkPdfManager</td><td>统一本地文件和远程文件的访问接口</td></tr>
+        <tr><td><strong>策略模式（Strategy）</strong></td><td>各种 Stream 解码器</td><td>不同压缩算法（Flate/LZW/JPEG）可互换，通过 Dict.get("Filter") 选择</td></tr>
+        <tr><td><strong>状态模式</strong></td><td>EvaluatorPreprocessor</td><td>PDF 图形状态栈（q/Q 操作符），保存/恢复变换矩阵、颜色、裁剪路径</td></tr>
+      </table>
+
+      <div class="callout callout-insight">
+        <div class="callout-title">🧠 最值得学习的设计</div>
+        <p>整个解析链路的<strong>分层架构</strong>——Lexer（字节→Token）→ Parser（Token→对象）→ XRef（偏移→对象）→ Evaluator（对象→指令）→ OperatorList（指令→传输）。每一层只做一件事，上层完全不需要知道下层的实现细节。这种分层在 JavaScript 项目中极为罕见，是系统级编程思维的体现。</p>
+      </div>
+    </section>
+
+    <footer class="page-footer">
+      <a href="index.html">← 项目总览</a>
+      <a href="module-rendering.html">下一章：渲染管线与 Worker 架构 →</a>
+    </footer>
+  </main>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'default'});</script>
+</body>
+</html>
