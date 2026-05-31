@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>lark-cli 源码深度解析 — 架构设计与工程化</title>
+  <style>
+    :root {
+      --color-bg: #ffffff;
+      --color-bg-secondary: #f8f9fa;
+      --color-bg-tertiary: #f1f3f5;
+      --color-text: #1a1a2e;
+      --color-text-secondary: #495057;
+      --color-text-muted: #868e96;
+      --color-border: #dee2e6;
+      --color-border-light: #e9ecef;
+      --color-primary: #2563eb;
+      --color-primary-light: #eff6ff;
+      --color-accent: #7c3aed;
+      --color-accent-light: #f5f3ff;
+      --color-success: #059669;
+      --color-success-bg: #ecfdf5;
+      --color-warning: #d97706;
+      --color-warning-bg: #fffbeb;
+      --color-danger: #dc2626;
+      --color-danger-bg: #fef2f2;
+      --color-info: #0891b2;
+      --color-info-bg: #ecfeff;
+      --color-code-bg: #f1f5f9;
+      --color-code-text: #1e293b;
+      --color-inline-code-bg: #f1f5f9;
+      --color-inline-code-text: #e11d48;
+      --sidebar-width: 260px;
+      --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
+      --font-mono: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", "Consolas", "Courier New", monospace;
+      --radius: 8px;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --color-bg: #0f172a;
+        --color-bg-secondary: #1e293b;
+        --color-bg-tertiary: #334155;
+        --color-text: #e2e8f0;
+        --color-text-secondary: #94a3b8;
+        --color-text-muted: #64748b;
+        --color-border: #334155;
+        --color-border-light: #1e293b;
+        --color-primary: #3b82f6;
+        --color-primary-light: #1e3a5f;
+        --color-accent: #8b5cf6;
+        --color-accent-light: #2e1065;
+        --color-success: #10b981;
+        --color-success-bg: #064e3b;
+        --color-warning: #f59e0b;
+        --color-warning-bg: #451a03;
+        --color-danger: #f87171;
+        --color-danger-bg: #450a0a;
+        --color-info: #22d3ee;
+        --color-info-bg: #083344;
+        --color-code-bg: #1e293b;
+        --color-code-text: #e2e8f0;
+        --color-inline-code-bg: #334155;
+        --color-inline-code-text: #f87171;
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+    body {
+      font-family: var(--font-sans); font-size: 15px; line-height: 1.7;
+      color: var(--color-text); background: var(--color-bg);
+      -webkit-font-smoothing: antialiased;
+    }
+    .layout { display: flex; min-height: 100vh; }
+    .sidebar {
+      position: fixed; top: 0; left: 0; width: var(--sidebar-width); height: 100vh;
+      background: var(--color-bg-secondary); border-right: 1px solid var(--color-border);
+      overflow-y: auto; padding: 24px 20px; z-index: 100;
+    }
+    .sidebar-header { font-size: 13px; font-weight: 600; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--color-border); }
+    .sidebar-title { font-size: 16px; font-weight: 700; color: var(--color-text); margin-bottom: 20px; }
+    .sidebar-title a { color: inherit; text-decoration: none; }
+    .sidebar-nav { list-style: none; }
+    .sidebar-nav li { margin-bottom: 2px; }
+    .sidebar-nav a { display: block; padding: 6px 12px; border-radius: 6px; color: var(--color-text-secondary); text-decoration: none; font-size: 14px; transition: all 0.15s ease; }
+    .sidebar-nav a:hover { background: var(--color-bg-tertiary); color: var(--color-text); }
+    .sidebar-nav .sub-nav { padding-left: 16px; }
+    .sidebar-nav .sub-nav a { font-size: 13px; }
+
+    .main { margin-left: var(--sidebar-width); flex: 1; max-width: 900px; padding: 48px 56px 80px; }
+    .page-header { margin-bottom: 40px; padding-bottom: 32px; border-bottom: 1px solid var(--color-border); }
+    .page-header h1 { font-size: 32px; font-weight: 800; line-height: 1.2; margin-bottom: 12px; letter-spacing: -0.02em; }
+    .page-header .subtitle { font-size: 17px; color: var(--color-text-secondary); }
+    .badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; background: var(--color-bg-tertiary); color: var(--color-text-secondary); }
+    .badge-primary { background: var(--color-primary-light); color: var(--color-primary); }
+    .badge-accent { background: var(--color-accent-light); color: var(--color-accent); }
+
+    section { margin-bottom: 48px; }
+    section h2 { font-size: 24px; font-weight: 700; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--color-border-light); letter-spacing: -0.01em; }
+    section h3 { font-size: 19px; font-weight: 600; margin-top: 28px; margin-bottom: 12px; }
+    section h4 { font-size: 16px; font-weight: 600; color: var(--color-text-secondary); margin-top: 20px; margin-bottom: 8px; }
+    section p { margin-bottom: 14px; color: var(--color-text-secondary); }
+    section ul, section ol { margin-bottom: 14px; padding-left: 24px; color: var(--color-text-secondary); }
+    section li { margin-bottom: 6px; }
+    section a { color: var(--color-primary); text-decoration: none; }
+    section a:hover { text-decoration: underline; }
+
+    code { font-family: var(--font-mono); font-size: 13px; background: var(--color-inline-code-bg); color: var(--color-inline-code-text); padding: 2px 6px; border-radius: 4px; }
+    pre { background: var(--color-code-bg); color: var(--color-code-text); border-radius: var(--radius); padding: 20px 24px; overflow-x: auto; margin-bottom: 18px; border: 1px solid var(--color-border-light); font-size: 13px; line-height: 1.6; }
+    pre code { background: none; color: inherit; padding: 0; font-size: inherit; }
+    .kw { color: #7c3aed; font-weight: 600; } .str { color: #059669; } .cm { color: #868e96; font-style: italic; } .fn { color: #2563eb; } .type { color: #0891b2; }
+    @media (prefers-color-scheme: dark) { .kw { color: #a78bfa; } .str { color: #34d399; } .cm { color: #64748b; } .fn { color: #60a5fa; } .type { color: #22d3ee; } }
+
+    .callout { padding: 16px 20px; border-radius: var(--radius); margin-bottom: 18px; border-left: 4px solid; font-size: 14px; }
+    .callout-title { font-weight: 600; margin-bottom: 4px; }
+    .callout-info { background: var(--color-info-bg); border-color: var(--color-info); }
+    .callout-insight { background: var(--color-accent-light); border-color: var(--color-accent); }
+    .callout-tip { background: var(--color-success-bg); border-color: var(--color-success); }
+    .callout-warning { background: var(--color-warning-bg); border-color: var(--color-warning); }
+
+    table { width: 100%; border-collapse: collapse; margin-bottom: 18px; font-size: 14px; }
+    th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--color-border-light); }
+    th { font-weight: 600; color: var(--color-text); background: var(--color-bg-secondary); font-size: 13px; text-transform: uppercase; letter-spacing: 0.03em; }
+    td { color: var(--color-text-secondary); }
+    tr:hover td { background: var(--color-bg-secondary); }
+
+    .dir-tree { font-family: var(--font-mono); font-size: 13px; line-height: 1.8; color: var(--color-text-secondary); background: var(--color-code-bg); padding: 16px 20px; border-radius: var(--radius); margin-bottom: 18px; white-space: pre; overflow-x: auto; border: 1px solid var(--color-border-light); }
+    .dir-tree .dir { color: var(--color-primary); font-weight: 600; }
+    .dir-tree .comment { color: var(--color-text-muted); }
+
+    .code-ref { border: 1px solid var(--color-border); border-radius: var(--radius); margin-bottom: 20px; overflow: hidden; }
+    .code-ref__header { display: flex; justify-content: space-between; align-items: center; padding: 8px 16px; background: var(--color-bg-tertiary); border-bottom: 1px solid var(--color-border-light); font-size: 12px; }
+    .code-ref__path { font-family: var(--font-mono); color: var(--color-text-muted); font-weight: 500; }
+    .code-ref__link { color: var(--color-primary); text-decoration: none; font-weight: 600; font-size: 12px; }
+    .code-ref pre { margin: 0; border: none; border-radius: 0; }
+
+    .comparison-table th:first-child, .comparison-table td:first-child { font-weight: 600; color: var(--color-text); }
+    .flow-steps { counter-reset: step; list-style: none; padding: 0; margin-bottom: 20px; }
+    .flow-steps li { counter-increment: step; position: relative; padding-left: 40px; margin-bottom: 16px; padding-bottom: 16px; border-left: 2px solid var(--color-border); }
+    .flow-steps li:last-child { border-left-color: transparent; }
+    .flow-steps li::before { content: counter(step); position: absolute; left: -14px; top: 0; width: 26px; height: 26px; border-radius: 50%; background: var(--color-primary); color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+
+    .page-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--color-border); }
+    .page-nav a { color: var(--color-primary); text-decoration: none; font-weight: 500; font-size: 14px; }
+    .text-muted { color: var(--color-text-muted); }
+    .text-sm { font-size: 13px; }
+
+    @media (max-width: 1024px) { .sidebar { transform: translateX(-100%); } .sidebar.open { transform: translateX(0); } .main { margin-left: 0; padding: 32px 24px; } }
+    @media (max-width: 640px) { .page-header h1 { font-size: 24px; } section h2 { font-size: 20px; } }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>mermaid.initialize({ startOnLoad: true, theme: 'default' });</script>
+</head>
+
+<body>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">源码解析</div>
+      <div class="sidebar-title"><a href="#">lark-cli</a></div>
+      <ul class="sidebar-nav">
+        <li><a href="#overview">工程化概览</a></li>
+        <li><a href="#structure">项目结构</a></li>
+        <li><a href="#bootstrap">核心链路</a></li>
+        <li class="sub-nav"><a href="#bootstrap-step">Bootstrap → Build → Execute</a></li>
+        <li class="sub-nav"><a href="#cmd-reg">命令注册机制</a></li>
+        <li class="sub-nav"><a href="#shortcut-exec">Shortcut 执行流程</a></li>
+        <li><a href="#errors">错误处理体系</a></li>
+        <li class="sub-nav"><a href="#problem">RFC 7807 Problem</a></li>
+        <li class="sub-nav"><a href="#category">9 种错误类别</a></li>
+        <li class="sub-nav"><a href="#typed-error">TypedError 设计</a></li>
+        <li><a href="#config">配置与认证</a></li>
+        <li class="sub-nav"><a href="#multi-app">多应用配置</a></li>
+        <li class="sub-nav"><a href="#brand">品牌适配</a></li>
+        <li class="sub-nav"><a href="#credential">凭证管理</a></li>
+        <li><a href="#extension">扩展机制</a></li>
+        <li><a href="#patterns">设计模式</a></li>
+        <li><a href="#summary">学习要点总结</a></li>
+      </ul>
+    </aside>
+
+    <main class="main" id="main-content">
+
+      <header class="page-header">
+        <h1>lark-cli 源码深度解析</h1>
+        <p class="subtitle">
+          深入 lark-cli 的 Go 源码，理解其三层命令架构、RFC 7807 错误体系、
+          多应用配置管理、扩展机制与关键设计模式。
+        </p>
+        <div class="badges">
+          <span class="badge badge-primary">Go 1.23+</span>
+          <span class="badge badge-accent">cobra CLI</span>
+          <span class="badge">~30 internal 包</span>
+          <span class="badge">5 extension 域</span>
+        </div>
+      </header>
+
+      <!-- ====== 工程化概览 ====== -->
+      <section id="overview">
+        <h2>工程化概览</h2>
+
+        <h3>技术栈</h3>
+        <table>
+          <tr><th>维度</th><th>选择</th></tr>
+          <tr><td>语言</td><td>Go 1.23+</td></tr>
+          <tr><td>CLI 框架</td><td><code>github.com/spf13/cobra</code> + <code>pflag</code></td></tr>
+          <tr><td>飞书 SDK</td><td><code>github.com/larksuite/oapi-sdk-go/v3</code></td></tr>
+          <tr><td>分发渠道</td><td>npm (<code>@larksuite/cli</code>) + GoReleaser</td></tr>
+          <tr><td>Lint</td><td>golangci-lint + 自研 <code>lint/errscontract</code></td></tr>
+          <tr><td>构建</td><td><code>build.sh</code> + Makefile</td></tr>
+        </table>
+
+        <h3>入口文件</h3>
+        <div class="code-ref">
+          <div class="code-ref__header">
+            <span class="code-ref__path">main.go:1-17</span>
+          </div>
+          <pre><code><span class="kw">package</span> main
+
+<span class="kw">import</span> (
+    <span class="str">"os"</span>
+    <span class="str">"github.com/larksuite/cli/cmd"</span>
+    _ <span class="str">"github.com/larksuite/cli/extension/credential/env"</span> <span class="cm">// 激活 env 凭证提供者</span>
+)
+
+<span class="kw">func</span> <span class="fn">main</span>() {
+    os.<span class="fn">Exit</span>(cmd.<span class="fn">Execute</span>())
+}</code></pre>
+        </div>
+
+        <div class="callout callout-insight">
+          <div class="callout-title">💡 设计洞察：入口极简</div>
+          <p>
+            <code>main.go</code> 只有 17 行。核心逻辑全部封装在 <code>cmd.Execute()</code> 中。
+            唯一的外部关注点是 <code>extension/credential/env</code> 的空白导入——通过 Go 的
+            <code>init()</code> 机制自动注册环境变量凭证提供者，无需在 <code>cmd</code> 包中显式引用。
+          </p>
+        </div>
+      </section>
+
+      <!-- ====== 项目结构 ====== -->
+      <section id="structure">
+        <h2>项目结构</h2>
+        <div class="dir-tree">
+<span class="dir">larksuite/</span>
+├── <span class="dir">cmd/</span>                  <span class="comment"># cobra 命令定义（root, auth, config, api, schema...）</span>
+├── <span class="dir">shortcuts/</span>           <span class="comment"># 18 个业务域的 +快捷命令实现</span>
+│   ├── <span class="dir">common/</span>           <span class="comment"># Shortcut 类型定义、Runner、工具函数</span>
+│   ├── <span class="dir">calendar/</span>        <span class="comment"># 日历域 shortcuts</span>
+│   ├── <span class="dir">im/</span>              <span class="comment"># 即时通讯域 shortcuts</span>
+│   ├── <span class="dir">base/</span>            <span class="comment"># 多维表格域</span>
+│   ├── <span class="dir">sheets/</span>          <span class="comment"># 电子表格域</span>
+│   └── ...               <span class="comment"># 其余 14 个业务域</span>
+├── <span class="dir">internal/</span>           <span class="comment"># 内部包（不对外暴露）</span>
+│   ├── <span class="dir">core/</span>            <span class="comment"># 配置模型、品牌定义、密钥解析</span>
+│   ├── <span class="dir">client/</span>          <span class="comment"># 飞书 API 客户端封装</span>
+│   ├── <span class="dir">auth/</span>            <span class="comment"># OAuth 2.0 认证流程</span>
+│   ├── <span class="dir">cmdutil/</span>         <span class="comment"># cobra Factory、IO 流抽象</span>
+│   ├── <span class="dir">cmdpolicy/</span>       <span class="comment"># 用户策略引擎（风险等级、域限制）</span>
+│   ├── <span class="dir">cmdmeta/</span>         <span class="comment"># cobra 命令元数据注解</span>
+│   ├── <span class="dir">registry/</span>        <span class="comment"># 服务注册表（OpenAPI 元数据）</span>
+│   ├── <span class="dir">output/</span>          <span class="comment"># 输出格式化（JSON/Table/CSV/NDJSON）</span>
+│   ├── <span class="dir">credential/</span>      <span class="comment"># 凭证提供者接口</span>
+│   ├── <span class="dir">keychain/</span>        <span class="comment"># OS 原生密钥链存储</span>
+│   ├── <span class="dir">hook/</span>            <span class="comment"># 生命周期钩子注册/触发</span>
+│   ├── <span class="dir">vfs/</span>             <span class="comment"># 虚拟文件系统抽象（可测试性）</span>
+│   ├── <span class="dir">i18n/</span>            <span class="comment"># 国际化（zh/en）</span>
+│   ├── <span class="dir">security/</span>        <span class="comment"># 输入净化与防注入</span>
+│   └── ...
+├── <span class="dir">errs/</span>               <span class="comment"># 公共错误契约（RFC 7807）</span>
+├── <span class="dir">extension/</span>          <span class="comment"># 可插拔扩展域</span>
+│   ├── <span class="dir">credential/</span>      <span class="comment"># 凭证来源扩展（env, keychain）</span>
+│   ├── <span class="dir">platform/</span>        <span class="comment"># 平台生命周期事件</span>
+│   ├── <span class="dir">transport/</span>       <span class="comment"># HTTP 传输层</span>
+│   ├── <span class="dir">fileio/</span>          <span class="comment"># 文件 IO 抽象</span>
+│   └── <span class="dir">contentsafety/</span>   <span class="comment"># 内容安全</span>
+├── <span class="dir">events/</span>             <span class="comment"># 事件订阅类型定义（im, vc, minutes）</span>
+├── <span class="dir">skills/</span>             <span class="comment"># 26 个 AI Agent Skill 定义</span>
+├── <span class="dir">sidecar/</span>            <span class="comment"># HMAC Sidecar 认证协议</span>
+├── <span class="dir">lint/</span>               <span class="comment"># 自研 lint 工具（errscontract 校验）</span>
+├── main.go               <span class="comment"># 入口</span>
+├── go.mod                 <span class="comment"># Go module 定义</span>
+└── Makefile               <span class="comment"># 构建脚本</span>
+        </div>
+
+        <div class="callout callout-tip">
+          <div class="callout-title">📐 模块划分原则</div>
+          <ul>
+            <li><code>cmd/</code> + <code>shortcuts/</code> = 用户可见的命令层</li>
+            <li><code>internal/</code> = 不可导出的实现细节，30+ 子包各司其职</li>
+            <li><code>errs/</code> = 唯一的公共 API 契约包，外部消费者只依赖它</li>
+            <li><code>extension/</code> = Go <code>init()</code> 注册模式实现的可插拔扩展点</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ====== 核心链路 ====== -->
+      <section id="bootstrap">
+        <h2>核心链路：Bootstrap → Build → Execute</h2>
+
+        <h3 id="bootstrap-step">启动流程</h3>
+        <div class="mermaid">
+sequenceDiagram
+    participant main as main()
+    participant Boot as Bootstrap
+    participant Build as buildInternal
+    participant Reg as RegisterShortcuts
+    participant Exec as rootCmd.Execute
+    participant Exit as handleRootError
+
+    main->>Boot: BootstrapInvocationContext(os.Args)
+    Boot-->>main: InvocationContext{Profile}
+    main->>Build: buildInternal(ctx, inv)
+    Build->>Build: NewDefault(factory)
+    Build->>Build: 注册 config/auth/api/schema/event/update/doctor 子命令
+    Build->>Build: service.RegisterServiceCommands (API 命令)
+    Build->>Reg: shortcuts.RegisterShortcuts (+快捷命令)
+    Build->>Build: installUnknownSubcommandGuard
+    Build->>Build: installPluginsAndHooks
+    Build->>Build: applyUserPolicyPruning
+    Build-->>main: factory, rootCmd, registry
+    main->>Exec: rootCmd.Execute()
+    Exec-->>main: error or nil
+    main->>Exit: handleRootError(err)
+    Exit-->>main: exit code
+    main->>main: os.Exit(code)
+        </div>
+        <p class="text-muted text-sm" style="text-align:center;margin-top:-10px;margin-bottom:20px;">
+          图：从 main() 到进程退出的完整链路
+        </p>
+
+        <h4>Bootstrap 阶段</h4>
+        <div class="code-ref">
+          <div class="code-ref__header">
+            <span class="code-ref__path">cmd/bootstrap.go:17-37</span>
+          </div>
+          <pre><code><span class="kw">func</span> <span class="fn">BootstrapInvocationContext</span>(args []<span class="type">string</span>) (<span class="type">cmdutil.InvocationContext</span>, <span class="type">error</span>) {
+    <span class="kw">var</span> globals <span class="type">GlobalOptions</span>
+    fs := pflag.<span class="fn">NewFlagSet</span>(<span class="str">"bootstrap"</span>, pflag.<span class="fn">ContinueOnError</span>)
+    fs.ParseErrorsAllowlist.<span class="type">UnknownFlags</span> = <span class="kw">true</span>
+    <span class="fn">RegisterGlobalFlags</span>(fs, &globals)
+    <span class="kw">if</span> err := fs.<span class="fn">Parse</span>(args); err != <span class="kw">nil</span> { ... }
+    <span class="kw">return</span> cmdutil.<span class="type">InvocationContext</span>{Profile: globals.<span class="type">Profile</span>}, <span class="kw">nil</span>
+}</code></pre>
+        </div>
+        <p>
+          Bootstrap 阶段<strong>在 cobra 命令树构建之前</strong>解析全局 flag（如 <code>--profile</code>），
+          确保后续配置解析能使用正确的 profile。使用 <code>pflag.ContinueOnError</code> +
+          <code>UnknownFlags=true</code> 的宽容解析策略——只提取已知 flag，忽略子命令参数。
+        </p>
+
+        <h4>Build 阶段</h4>
+        <p>
+          <code>buildInternal()</code> 是纯组装函数，无任何 IO 副作用。按以下顺序构建命令树：
+        </p>
+        <ol class="flow-steps">
+          <li>
+            <strong>创建 Factory</strong> — <code>cmdutil.NewDefault()</code> 封装 IO 流、配置、凭证、品牌信息
+          </li>
+          <li>
+            <strong>创建 rootCmd</strong> — 设置 Use/Short/Long/Version
+          </li>
+          <li>
+            <strong>注册核心子命令</strong> — config, auth, profile, doctor, api, schema, completion, update, event
+          </li>
+          <li>
+            <strong>注册 API 命令</strong> — <code>service.RegisterServiceCommands()</code> 从 OAPI 元数据生成 100+ 命令
+          </li>
+          <li>
+            <strong>注册 Shortcuts</strong> — <code>shortcuts.RegisterShortcutsWithContext()</code> 挂载 18 个业务域的 +命令
+          </li>
+          <li>
+            <strong>安装守卫</strong> — <code>installUnknownSubcommandGuard()</code> 为纯分组命令注入错误提示
+          </li>
+          <li>
+            <strong>安装插件</strong> — <code>installPluginsAndHooks()</code> 加载外部插件并注册生命周期钩子
+          </li>
+          <li>
+            <strong>策略裁剪</strong> — <code>applyUserPolicyPruning()</code> 根据用户配置裁剪高/中风险命令
+          </li>
+        </ol>
+
+        <div class="callout callout-info">
+          <div class="callout-title">🔒 Fail-Closed 安全策略</div>
+          <p>
+            插件加载失败时采用 <strong>Fail-Closed</strong> 策略：安装一个 guard stub 命令，
+            用户执行任何命令都会看到插件错误提示，防止插件安全策略被静默绕过。
+            YAML 配置错误则采用 <strong>Fail-Open</strong>（仅警告），避免配置拼写错误导致 CLI 完全不可用。
+          </p>
+        </div>
+
+        <h3 id="cmd-reg">命令注册机制</h3>
+        <p>
+          Shortcuts 的注册是 lark-cli 最精巧的设计之一。每个业务域包通过 <code>init()</code> 将自己的
+          shortcuts 聚合到全局切片中：
+        </p>
+
+        <div class="code-ref">
+          <div class="code-ref__header">
+            <span class="code-ref__path">shortcuts/register.go:61-82（init 函数）</span>
+          </div>
+          <pre><code><span class="kw">var</span> allShortcuts []<span class="type">common.Shortcut</span>
+
+<span class="kw">func</span> <span class="fn">init</span>() {
+    allShortcuts = <span class="fn">append</span>(allShortcuts, apps.<span class="fn">Shortcuts</span>()...)
+    allShortcuts = <span class="fn">append</span>(allShortcuts, calendar.<span class="fn">Shortcuts</span>()...)
+    allShortcuts = <span class="fn">append</span>(allShortcuts, doc.<span class="fn">Shortcuts</span>()...)
+    <span class="cm">// ... 18 个业务域按需追加</span>
+}</code></pre>
+        </div>
+
+        <p>
+          <code>RegisterShortcutsWithContext()</code> 按 <code>Service</code> 字段分组，
+          为每组找到或创建对应的 cobra 命令节点，然后调用 <code>shortcut.MountWithContext()</code> 挂载。
+          品牌守卫机制 (<code>brandRestrictedServices</code>) 按品牌（飞书/Lark）限制特定域的可用性。
+        </p>
+
+        <h3 id="shortcut-exec">Shortcut 类型与执行流程</h3>
+        <p>
+          <code>common.Shortcut</code> 是一个声明式结构体（<code>shortcuts/common/types.go:38-65</code>），
+          定义了命令的完整契约：
+        </p>
+        <ul>
+          <li><strong>元数据</strong>：<code>Service</code>, <code>Command</code>, <code>Description</code>, <code>Risk</code></li>
+          <li><strong>权限</strong>：<code>Scopes</code>, <code>UserScopes</code>, <code>BotScopes</code>（支持按身份区分）</li>
+          <li><strong>参数</strong>：<code>Flags []Flag</code>（声明式 flag 定义）</li>
+          <li><strong>钩子</strong>：<code>Validate</code>, <code>Execute</code>, <code>DryRun</code>, <code>PostMount</code></li>
+        </ul>
+
+        <div class="callout callout-insight">
+          <div class="callout-title">💡 如果我来写 vs 实际做法</div>
+          <table class="comparison-table">
+            <tr><th>直觉做法</th><th>lark-cli 实际做法</th></tr>
+            <tr><td>每个命令手写 cobra.Command</td><td><strong>声明式 Shortcut 结构体</strong> — 框架自动生成 cobra.Command，减少样板代码</td></tr>
+            <tr><td>scope 硬编码在命令逻辑中</td><td>scope 声明为 <strong>Shortcut 字段</strong>，框架统一做 pre-flight 校验</td></tr>
+            <tr><td>身份判断分散在各命令</td><td>框架通过 <code>AuthTypes</code> + <code>--as</code> flag 统一解析身份</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ====== 错误处理体系 ====== -->
+      <section id="errors">
+        <h2>错误处理体系</h2>
+
+        <h3 id="problem">RFC 7807 Problem 设计</h3>
+        <p>
+          lark-cli 的错误体系是它最值得学习的部分之一。它采用 <strong>RFC 7807 Problem Details</strong>
+          标准，定义了统一的错误契约（<code>errs/problem.go</code>）：
+        </p>
+        <pre><code><span class="kw">type</span> <span class="type">Problem</span> <span class="kw">struct</span> {
+    Category       <span class="type">Category</span> `json:<span class="str">"type"</span>`           <span class="cm">// 顶层分类轴</span>
+    Subtype        <span class="type">Subtype</span>  `json:<span class="str">"subtype,omitempty"</span>` <span class="cm">// 子类型标识</span>
+    Code           <span class="type">int</span>      `json:<span class="str">"code,omitempty"</span>`    <span class="cm">// 错误码</span>
+    Message        <span class="type">string</span>   `json:<span class="str">"message"</span>`           <span class="cm">// 人类可读消息</span>
+    Hint           <span class="type">string</span>   `json:<span class="str">"hint,omitempty"</span>`     <span class="cm">// 修复建议</span>
+    LogID          <span class="type">string</span>   `json:<span class="str">"log_id,omitempty"</span>`   <span class="cm">// 日志关联 ID</span>
+    Troubleshooter <span class="type">string</span>   `json:<span class="str">"troubleshooter,omitempty"</span>` <span class="cm">// 飞书诊断链接</span>
+    Retryable      <span class="type">bool</span>     `json:<span class="str">"retryable,omitempty"</span>` <span class="cm">// 是否可重试</span>
+}</code></pre>
+
+        <div class="callout callout-tip">
+          <div class="callout-title">🎯 设计目标</div>
+          <p>
+            AI Agent 和 shell 脚本可以直接解析结构化 JSON，而不是正则匹配错误字符串。<br>
+            <code>ProblemOf(err)</code> 提供多态读取；<code>IsXxx(err)</code> 系列断言函数提供类型判断。
+          </p>
+        </div>
+
+        <h3 id="category">9 种错误类别</h3>
+        <table>
+          <tr><th>Category</th><th>常量</th><th>说明</th></tr>
+          <tr><td>Validation</td><td><code>validation</code></td><td>参数校验失败</td></tr>
+          <tr><td>Authentication</td><td><code>authentication</code></td><td>认证失败（未登录/token 过期）</td></tr>
+          <tr><td>Authorization</td><td><code>authorization</code></td><td>权限不足（scope 缺失）</td></tr>
+          <tr><td>Config</td><td><code>config</code></td><td>配置错误（缺少 AppID）</td></tr>
+          <tr><td>Network</td><td><code>network</code></td><td>网络错误（DNS/超时）</td></tr>
+          <tr><td>API</td><td><code>api</code></td><td>飞书 API 返回错误</td></tr>
+          <tr><td>Policy</td><td><code>policy</code></td><td>安全策略拒绝</td></tr>
+          <tr><td>Internal</td><td><code>internal</code></td><td>内部错误</td></tr>
+          <tr><td>Confirmation</td><td><code>confirmation</code></td><td>需要用户确认</td></tr>
+        </table>
+
+        <h3 id="typed-error">TypedError 设计模式</h3>
+        <p>
+          每个 Category 对应一个具体的 <code>*XxxError</code> 类型，嵌入 <code>Problem</code> 并添加类型专属扩展字段。
+          使用 <strong>Builder 模式</strong>的链式 API：
+        </p>
+        <div class="code-ref">
+          <div class="code-ref__header">
+            <span class="code-ref__path">errs/types.go:33-38（推荐用法）</span>
+          </div>
+          <pre><code><span class="kw">return</span> errs.<span class="fn">NewValidationError</span>(errs.<span class="type">SubtypeInvalidArgument</span>,
+    <span class="str">"invalid --start: %v"</span>, err).
+    <span class="fn">WithHint</span>(<span class="str">"expected RFC3339, e.g. 2026-05-26T10:00:00Z"</span>).
+    <span class="fn">WithParam</span>(<span class="str">"--start"</span>)</code></pre>
+        </div>
+
+        <div class="callout callout-insight">
+          <div class="callout-title">💡 设计亮点</div>
+          <ul>
+            <li><strong>Category 由构造函数锁定</strong> — 调用方永远无法误填 Category</li>
+            <li><strong>Subtype + Message 是必选位置参数</strong> — 编译器阻止遗漏</li>
+            <li><strong>WithXxx 返回具体类型指针</strong> — 链式调用不需要类型断言</li>
+            <li><strong>静态 lint 校验</strong> — <code>lint/errscontract</code> 检查 subtype 是否声明、是否拼写错误</li>
+            <li><strong>nil-receiver safe</strong> — 所有 Error/Unwrap 方法对 nil 指针安全</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ====== 配置与认证 ====== -->
+      <section id="config">
+        <h2>配置与认证</h2>
+
+        <h3 id="multi-app">多应用配置模型</h3>
+        <p>
+          <code>MultiAppConfig</code>（<code>internal/core/config.go:61-66</code>）支持在一个 CLI 实例中管理多个飞书应用。
+          每个应用有独立的 AppID、AppSecret、品牌、语言和权限配置：
+        </p>
+        <pre><code><span class="kw">type</span> <span class="type">MultiAppConfig</span> <span class="kw">struct</span> {
+    StrictMode  <span class="type">StrictMode</span>  `json:<span class="str">"strictMode,omitempty"</span>`
+    CurrentApp  <span class="type">string</span>      `json:<span class="str">"currentApp,omitempty"</span>`   <span class="cm">// 当前活跃应用</span>
+    PreviousApp <span class="type">string</span>      `json:<span class="str">"previousApp,omitempty"</span>`  <span class="cm">// 上一个应用（支持 quick-swap）</span>
+    Apps        []<span class="type">AppConfig</span>  `json:<span class="str">"apps"</span>`
+}</code></pre>
+
+        <p>应用选择优先级：<code>--profile</code> flag → <code>CurrentApp</code> 字段 → <code>Apps[0]</code></p>
+
+        <h3 id="brand">品牌适配</h3>
+        <p>
+          通过 <code>LarkBrand</code> 枚举（<code>internal/core/types.go:9-12</code>）区分飞书（中国）和 Lark（国际）：
+        </p>
+        <pre><code><span class="kw">const</span> (
+    <span class="type">BrandFeishu</span> <span class="type">LarkBrand</span> = <span class="str">"feishu"</span>  <span class="cm">// open.feishu.cn</span>
+    <span class="type">BrandLark</span>   <span class="type">LarkBrand</span> = <span class="str">"lark"</span>    <span class="cm">// open.larksuite.com</span>
+)</code></pre>
+        <p>
+          <code>ResolveEndpoints()</code> 根据品牌返回不同的 API 端点 URL。品牌守卫在 Shortcuts 注册时生效，
+          例如 <code>apps</code> 域仅在飞书品牌可用。
+        </p>
+
+        <h3 id="credential">凭证管理</h3>
+        <p>
+          凭证存储通过 <code>internal/keychain</code> 接口抽象，支持 OS 原生密钥链。
+          <code>extension/credential/env</code> 通过 <code>init()</code> 注册环境变量凭证提供者作为回退方案。
+        </p>
+        <p>
+          Secret 字段使用 <code>SecretInput</code> 类型，支持加密存储和延迟解析。
+          Workspace 管理（<code>internal/core/workspace.go</code>）处理多 profile 的隔离。
+        </p>
+      </section>
+
+      <!-- ====== 扩展机制 ====== -->
+      <section id="extension">
+        <h2>扩展机制</h2>
+        <p>
+          lark-cli 通过 Go 的 <code>init()</code> + 空白导入实现了一套轻量级插件体系：
+        </p>
+
+        <h3>Extension 域</h3>
+        <table>
+          <tr><th>扩展域</th><th>路径</th><th>机制</th></tr>
+          <tr><td>credential</td><td><code>extension/credential/</code></td><td>多来源凭证提供者注册</td></tr>
+          <tr><td>platform</td><td><code>extension/platform/</code></td><td>Startup/Shutdown 生命周期事件</td></tr>
+          <tr><td>transport</td><td><code>extension/transport/</code></td><td>HTTP 传输层定制</td></tr>
+          <tr><td>fileio</td><td><code>extension/fileio/</code></td><td>文件 IO 抽象</td></tr>
+          <tr><td>contentsafety</td><td><code>extension/contentsafety/</code></td><td>内容安全检查</td></tr>
+        </table>
+
+        <h3>事件订阅</h3>
+        <p>
+          <code>events/register.go</code> 通过 <code>init()</code> 将各域的 <code>KeyDefinition</code>
+          注册到全局事件注册表。当前支持 IM、VC、Minutes 三类事件的 WebSocket 订阅。
+        </p>
+
+        <div class="callout callout-insight">
+          <div class="callout-title">💡 如果我来写 vs 实际做法</div>
+          <table class="comparison-table">
+            <tr><th>直觉做法</th><th>lark-cli 实际做法</th></tr>
+            <tr><td>用 plugin 框架（hashicorp/go-plugin）</td><td>用 <strong>Go init() + 空白导入</strong>，零运行时依赖，编译期静态检查</td></tr>
+            <tr><td>每个扩展域单独配置</td><td>统一通过 <code>hook.Registry</code> + <code>hook.Emit()</code> 统一管理生命周期</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ====== 设计模式 ====== -->
+      <section id="patterns">
+        <h2>关键设计模式</h2>
+
+        <table>
+          <tr><th>模式</th><th>应用位置</th><th>说明</th></tr>
+          <tr>
+            <td><strong>Factory</strong></td>
+            <td><code>internal/cmdutil</code></td>
+            <td>封装 IO 流、配置、凭证、品牌的统一入口，所有命令通过 <code>cmdutil.Factory</code> 获取依赖</td>
+          </tr>
+          <tr>
+            <td><strong>Builder</strong></td>
+            <td><code>cmd/build.go</code> → <code>BuildOption</code></td>
+            <td>函数选项模式，支持 <code>WithIO</code>, <code>WithKeychain</code>, <code>HideProfile</code> 等可选配置</td>
+          </tr>
+          <tr>
+            <td><strong>Registry + init()</strong></td>
+            <td><code>shortcuts/register.go</code>, <code>events/register.go</code>, <code>extension/credential/env</code></td>
+            <td>通过包级 <code>init()</code> 自动注册，新业务域只需添加文件 + 空白导入</td>
+          </tr>
+          <tr>
+            <td><strong>Strategy</strong></td>
+            <td><code>internal/cmdpolicy</code></td>
+            <td>用户策略引擎：高风险命令可被禁用，品牌特定域可被隐藏</td>
+          </tr>
+          <tr>
+            <td><strong>Adapter</strong></td>
+            <td><code>internal/vfs</code></td>
+            <td>虚拟文件系统抽象，使单元测试可以不依赖真实文件系统</td>
+          </tr>
+          <tr>
+            <td><strong>Chain of Responsibility</strong></td>
+            <td><code>cmd/root.go</code> → <code>handleRootError</code></td>
+            <td>多级错误分发：TypedError → 旧版 ExitError → Cobra 错误，逐级匹配</td>
+          </tr>
+        </table>
+      </section>
+
+      <!-- ====== 学习要点总结 ====== -->
+      <section id="summary">
+        <h2>学习要点总结</h2>
+
+        <h3>工程化启示</h3>
+        <ul>
+          <li><strong>入口极简</strong> — <code>main.go</code> 只有 17 行，所有逻辑委托给 <code>cmd</code> 包</li>
+          <li><strong>Build/Execute 分离</strong> — <code>buildInternal()</code> 纯组装无副作用；<code>Execute()</code> 处理运行时行为</li>
+          <li><strong>Fail-Closed 安全策略</strong> — 插件加载失败时阻止命令执行，而非静默降级</li>
+        </ul>
+
+        <h3>架构设计启示</h3>
+        <ul>
+          <li><strong>声明式 Shortcut</strong> — 用结构体字段声明命令行为，框架自动生成 cobra 命令，大幅减少样板代码</li>
+          <li><strong>RFC 7807 错误契约</strong> — 统一的结构化错误，AI Agent 可直接解析</li>
+          <li><strong>TypedError + Builder 链</strong> — Category 构造函数锁定 + 链式 WithXxx，编译器保证正确性</li>
+          <li><strong>init() 注册器模式</strong> — 新增业务域只需添加文件，无需修改中央注册表</li>
+        </ul>
+
+        <h3>可复用技巧</h3>
+        <ul>
+          <li><strong>vfs.FS 接口</strong> — 文件系统抽象让测试不依赖真实文件</li>
+          <li><strong>BuildOption 函数选项</strong> — Golang 惯用的可选配置模式</li>
+          <li><strong>品牌守卫 map</strong> — 简单的 <code>map[string][]Brand</code> 实现多品牌差异化</li>
+          <li><strong>lint/errscontract</strong> — 自研 lint 工具保证错误 subtype 的一致性</li>
+        </ul>
+      </section>
+
+      <div class="page-nav">
+        <a href="usage.html">← 使用指南</a>
+        <span class="text-muted text-sm">— lark-cli 源码解析 · v1.0 —</span>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    (function () {
+      if (window.innerWidth > 1024) return;
+      const btn = document.createElement('button');
+      btn.textContent = '☰ 目录';
+      btn.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:200;padding:10px 16px;border-radius:24px;border:none;background:var(--color-primary);color:#fff;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 10px 15px -3px rgba(0,0,0,0.3);';
+      btn.onclick = function () { document.getElementById('sidebar').classList.toggle('open'); };
+      document.body.appendChild(btn);
+    })();
+  </script>
+</body>
+</html>

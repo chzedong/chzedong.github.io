@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>lark-cli 解构 — 飞书/Lark 官方 CLI 工具</title>
+  <style>
+    :root {
+      --color-bg: #ffffff;
+      --color-bg-secondary: #f8f9fa;
+      --color-text: #1a1a2e;
+      --color-text-secondary: #495057;
+      --color-text-muted: #868e96;
+      --color-primary: #2563eb;
+      --color-primary-light: #eff6ff;
+      --color-success: #059669;
+      --color-success-bg: #ecfdf5;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --color-bg: #0f172a;
+        --color-bg-secondary: #1e293b;
+        --color-text: #e2e8f0;
+        --color-text-secondary: #94a3b8;
+        --color-text-muted: #64748b;
+        --color-primary: #3b82f6;
+        --color-primary-light: #1e3a5f;
+        --color-success: #10b981;
+        --color-success-bg: #064e3b;
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
+      font-size: 15px; line-height: 1.7; color: var(--color-text); background: var(--color-bg);
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrapper { max-width: 720px; margin: 0 auto; padding: 80px 24px 60px; }
+    .hero { text-align: center; margin-bottom: 56px; }
+    .hero-icon {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 72px; height: 72px; border-radius: 20px;
+      background: linear-gradient(135deg, #2563eb, #7c3aed);
+      font-size: 32px; color: white; margin-bottom: 24px;
+    }
+    .hero h1 { font-size: 28px; font-weight: 800; margin-bottom: 12px; letter-spacing: -0.01em; }
+    .hero p { font-size: 16px; color: var(--color-text-secondary); max-width: 480px; margin: 0 auto; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+    .card {
+      display: block; padding: 28px 24px; border-radius: 14px;
+      border: 1px solid var(--color-bg-secondary);
+      background: var(--color-bg-secondary); text-decoration: none; color: inherit;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .card:hover { transform: translateY(-2px); box-shadow: 0 6px 24px rgba(0,0,0,0.1); }
+    .card-icon { font-size: 28px; margin-bottom: 14px; }
+    .card h3 { font-size: 17px; font-weight: 700; margin-bottom: 8px; color: var(--color-primary); }
+    .card p { font-size: 14px; color: var(--color-text-secondary); line-height: 1.6; }
+    .card .tag {
+      display: inline-block; padding: 2px 10px; border-radius: 12px;
+      font-size: 12px; font-weight: 600; margin-top: 12px;
+      background: var(--color-primary-light); color: var(--color-primary);
+    }
+    .footer {
+      text-align: center; margin-top: 60px; padding-top: 24px;
+      border-top: 1px solid var(--color-bg-secondary);
+      font-size: 13px; color: var(--color-text-muted);
+    }
+    .footer a { color: var(--color-primary); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="hero">
+      <div class="hero-icon">🦅</div>
+      <h1>lark-cli 深度解构</h1>
+      <p>
+        飞书/Lark 官方 CLI 工具源码学习文档。覆盖 18 大业务域、200+ 命令、
+        三层命令架构、RFC 7807 错误体系与 Agent-Native 设计理念。
+      </p>
+    </div>
+
+    <div class="cards">
+      <a href="usage.html" class="card">
+        <div class="card-icon">📖</div>
+        <h3>使用指南</h3>
+        <p>
+          安装、认证、三层命令体系、18 域命令参考、
+          输出格式、分页、Dry Run、Schema 自省、Agent Skills 完整列表。
+        </p>
+        <span class="tag">快速上手</span>
+      </a>
+      <a href="source.html" class="card">
+        <div class="card-icon">🔬</div>
+        <h3>源码深度解析</h3>
+        <p>
+          工程化概览、Bootstrap→Build→Execute 核心链路、
+          RFC 7807 错误体系、Shortcut 声明式设计、配置/认证/扩展机制、
+          6 种关键设计模式。
+        </p>
+        <span class="tag">架构设计</span>
+      </a>
+    </div>
+
+    <div class="footer">
+      <a href="../">← ZeDong's Portal</a>
+      &nbsp;·&nbsp;
+      <a href="https://github.com/larksuite/cli" target="_blank">GitHub</a>
+    </div>
+  </div>
+</body>
+</html>

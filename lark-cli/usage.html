@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>lark-cli 使用指南 — 飞书/Lark 官方 CLI 工具</title>
+  <style>
+    /* ========================================
+       Deconstruct OSS — 开源库解构文档样式
+       版本: 1.0.0
+       ======================================== */
+    :root {
+      --color-bg: #ffffff;
+      --color-bg-secondary: #f8f9fa;
+      --color-bg-tertiary: #f1f3f5;
+      --color-text: #1a1a2e;
+      --color-text-secondary: #495057;
+      --color-text-muted: #868e96;
+      --color-border: #dee2e6;
+      --color-border-light: #e9ecef;
+      --color-primary: #2563eb;
+      --color-primary-light: #eff6ff;
+      --color-primary-dark: #1d4ed8;
+      --color-accent: #7c3aed;
+      --color-accent-light: #f5f3ff;
+      --color-success: #059669;
+      --color-success-bg: #ecfdf5;
+      --color-warning: #d97706;
+      --color-warning-bg: #fffbeb;
+      --color-danger: #dc2626;
+      --color-danger-bg: #fef2f2;
+      --color-info: #0891b2;
+      --color-info-bg: #ecfeff;
+      --color-code-bg: #f1f5f9;
+      --color-code-text: #1e293b;
+      --color-inline-code-bg: #f1f5f9;
+      --color-inline-code-text: #e11d48;
+      --sidebar-width: 260px;
+      --header-height: 60px;
+      --max-content-width: 860px;
+      --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
+      --font-mono: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", "Consolas", "Courier New", monospace;
+      --radius: 8px;
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+      --transition: 150ms ease;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --color-bg: #0f172a;
+        --color-bg-secondary: #1e293b;
+        --color-bg-tertiary: #334155;
+        --color-text: #e2e8f0;
+        --color-text-secondary: #94a3b8;
+        --color-text-muted: #64748b;
+        --color-border: #334155;
+        --color-border-light: #1e293b;
+        --color-primary: #3b82f6;
+        --color-primary-light: #1e3a5f;
+        --color-primary-dark: #60a5fa;
+        --color-accent: #8b5cf6;
+        --color-accent-light: #2e1065;
+        --color-success: #10b981;
+        --color-success-bg: #064e3b;
+        --color-warning: #f59e0b;
+        --color-warning-bg: #451a03;
+        --color-danger: #f87171;
+        --color-danger-bg: #450a0a;
+        --color-info: #22d3ee;
+        --color-info-bg: #083344;
+        --color-code-bg: #1e293b;
+        --color-code-text: #e2e8f0;
+        --color-inline-code-bg: #334155;
+        --color-inline-code-text: #f87171;
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+      }
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; scroll-padding-top: calc(var(--header-height) + 20px); }
+    body {
+      font-family: var(--font-sans); font-size: 15px; line-height: 1.7;
+      color: var(--color-text); background: var(--color-bg);
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    }
+    .layout { display: flex; min-height: 100vh; }
+    .sidebar {
+      position: fixed; top: 0; left: 0; width: var(--sidebar-width); height: 100vh;
+      background: var(--color-bg-secondary); border-right: 1px solid var(--color-border);
+      overflow-y: auto; padding: 24px 20px; z-index: 100; transition: transform var(--transition);
+    }
+    .sidebar-header {
+      font-size: 13px; font-weight: 600; color: var(--color-text-muted);
+      text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 16px;
+      padding-bottom: 12px; border-bottom: 1px solid var(--color-border);
+    }
+    .sidebar-title { font-size: 16px; font-weight: 700; color: var(--color-text); margin-bottom: 20px; line-height: 1.3; }
+    .sidebar-title a { color: inherit; text-decoration: none; }
+    .sidebar-nav { list-style: none; }
+    .sidebar-nav li { margin-bottom: 2px; }
+    .sidebar-nav a {
+      display: block; padding: 6px 12px; border-radius: 6px;
+      color: var(--color-text-secondary); text-decoration: none; font-size: 14px; transition: all var(--transition);
+    }
+    .sidebar-nav a:hover { background: var(--color-bg-tertiary); color: var(--color-text); }
+    .sidebar-nav a.active { background: var(--color-primary-light); color: var(--color-primary); font-weight: 600; }
+    .sidebar-nav .sub-nav { padding-left: 16px; }
+    .sidebar-nav .sub-nav a { font-size: 13px; }
+
+    .main { margin-left: var(--sidebar-width); flex: 1; max-width: var(--max-content-width); padding: 48px 56px 80px; }
+    .page-header { margin-bottom: 40px; padding-bottom: 32px; border-bottom: 1px solid var(--color-border); }
+    .page-header h1 { font-size: 32px; font-weight: 800; line-height: 1.2; color: var(--color-text); margin-bottom: 12px; letter-spacing: -0.02em; }
+    .page-header .subtitle { font-size: 17px; color: var(--color-text-secondary); line-height: 1.6; margin-bottom: 16px; }
+    .badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .badge {
+      display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 20px;
+      font-size: 12px; font-weight: 500; background: var(--color-bg-tertiary); color: var(--color-text-secondary);
+    }
+    .badge-primary { background: var(--color-primary-light); color: var(--color-primary); }
+    .badge-accent { background: var(--color-accent-light); color: var(--color-accent); }
+    .badge-success { background: var(--color-success-bg); color: var(--color-success); }
+
+    section { margin-bottom: 48px; }
+    section h2 {
+      font-size: 24px; font-weight: 700; color: var(--color-text); margin-bottom: 16px;
+      padding-bottom: 8px; border-bottom: 1px solid var(--color-border-light); letter-spacing: -0.01em;
+    }
+    section h3 { font-size: 19px; font-weight: 600; color: var(--color-text); margin-top: 28px; margin-bottom: 12px; }
+    section h4 { font-size: 16px; font-weight: 600; color: var(--color-text-secondary); margin-top: 20px; margin-bottom: 8px; }
+    section p { margin-bottom: 14px; color: var(--color-text-secondary); }
+    section ul, section ol { margin-bottom: 14px; padding-left: 24px; color: var(--color-text-secondary); }
+    section li { margin-bottom: 6px; }
+    section a { color: var(--color-primary); text-decoration: none; }
+    section a:hover { text-decoration: underline; }
+
+    code {
+      font-family: var(--font-mono); font-size: 13px; background: var(--color-inline-code-bg);
+      color: var(--color-inline-code-text); padding: 2px 6px; border-radius: 4px;
+    }
+    pre {
+      background: var(--color-code-bg); color: var(--color-code-text); border-radius: var(--radius);
+      padding: 20px 24px; overflow-x: auto; margin-bottom: 18px;
+      border: 1px solid var(--color-border-light); font-size: 13px; line-height: 1.6;
+    }
+    pre code { background: none; color: inherit; padding: 0; font-size: inherit; }
+    .kw { color: #7c3aed; font-weight: 600; } .str { color: #059669; } .num { color: #d97706; }
+    .cm { color: #868e96; font-style: italic; } .fn { color: #2563eb; } .op { color: #dc2626; } .type { color: #0891b2; }
+    @media (prefers-color-scheme: dark) {
+      .kw { color: #a78bfa; } .str { color: #34d399; } .num { color: #fbbf24; }
+      .cm { color: #64748b; } .fn { color: #60a5fa; } .op { color: #f87171; } .type { color: #22d3ee; }
+    }
+
+    .callout {
+      padding: 16px 20px; border-radius: var(--radius); margin-bottom: 18px;
+      border-left: 4px solid; font-size: 14px;
+    }
+    .callout-title { font-weight: 600; margin-bottom: 4px; }
+    .callout-info { background: var(--color-info-bg); border-color: var(--color-info); }
+    .callout-tip { background: var(--color-success-bg); border-color: var(--color-success); }
+    .callout-warning { background: var(--color-warning-bg); border-color: var(--color-warning); }
+    .callout-danger { background: var(--color-danger-bg); border-color: var(--color-danger); }
+    .callout-insight { background: var(--color-accent-light); border-color: var(--color-accent); }
+
+    table { width: 100%; border-collapse: collapse; margin-bottom: 18px; font-size: 14px; }
+    th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--color-border-light); }
+    th {
+      font-weight: 600; color: var(--color-text); background: var(--color-bg-secondary);
+      font-size: 13px; text-transform: uppercase; letter-spacing: 0.03em;
+    }
+    td { color: var(--color-text-secondary); }
+    tr:hover td { background: var(--color-bg-secondary); }
+
+    .dir-tree {
+      font-family: var(--font-mono); font-size: 13px; line-height: 1.8; color: var(--color-text-secondary);
+      background: var(--color-code-bg); padding: 16px 20px; border-radius: var(--radius);
+      margin-bottom: 18px; white-space: pre; overflow-x: auto; border: 1px solid var(--color-border-light);
+    }
+    .dir-tree .comment { color: var(--color-text-muted); }
+    .dir-tree .dir { color: var(--color-primary); font-weight: 600; }
+
+    .page-nav {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--color-border);
+    }
+    .page-nav a { color: var(--color-primary); text-decoration: none; font-weight: 500; font-size: 14px; }
+    .page-nav a:hover { text-decoration: underline; }
+
+    .text-muted { color: var(--color-text-muted); }
+    .text-sm { font-size: 13px; }
+    .mt-0 { margin-top: 0; }
+    .highlight { background: linear-gradient(120deg, var(--color-warning-bg) 0%, var(--color-warning-bg) 100%); padding: 2px 4px; border-radius: 2px; }
+
+    @media (max-width: 1024px) {
+      .sidebar { transform: translateX(-100%); }
+      .sidebar.open { transform: translateX(0); }
+      .main { margin-left: 0; padding: 32px 24px; }
+    }
+    @media (max-width: 640px) {
+      .page-header h1 { font-size: 24px; }
+      section h2 { font-size: 20px; }
+      section h3 { font-size: 17px; }
+    }
+    @media print { .sidebar { display: none; } .main { margin-left: 0; padding: 0; max-width: 100%; } .page-nav { display: none; } pre, .dir-tree { white-space: pre-wrap; word-break: break-all; } }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>mermaid.initialize({ startOnLoad: true, theme: 'default' });</script>
+</head>
+
+<body>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">CLI 使用指南</div>
+      <div class="sidebar-title"><a href="#">lark-cli</a></div>
+      <ul class="sidebar-nav">
+        <li><a href="#overview">项目概述</a></li>
+        <li><a href="#install">安装与快速开始</a></li>
+        <li class="sub-nav"><a href="#install-human">人类用户</a></li>
+        <li class="sub-nav"><a href="#install-agent">AI Agent</a></li>
+        <li><a href="#auth">认证系统</a></li>
+        <li><a href="#three-layer">三层命令体系</a></li>
+        <li class="sub-nav"><a href="#shortcuts">Shortcuts 快捷命令</a></li>
+        <li class="sub-nav"><a href="#api-cmd">API 命令</a></li>
+        <li class="sub-nav"><a href="#raw-api">通用 API 调用</a></li>
+        <li><a href="#domain-ref">业务域命令参考</a></li>
+        <li><a href="#advanced">进阶用法</a></li>
+        <li class="sub-nav"><a href="#format">输出格式</a></li>
+        <li class="sub-nav"><a href="#pagination">分页</a></li>
+        <li class="sub-nav"><a href="#dryrun">Dry Run</a></li>
+        <li class="sub-nav"><a href="#schema">Schema 自省</a></li>
+        <li><a href="#agent-skills">Agent Skills</a></li>
+        <li><a href="#security">安全提示</a></li>
+      </ul>
+    </aside>
+
+    <main class="main" id="main-content">
+
+      <!-- ====== Header ====== -->
+      <header class="page-header">
+        <h1>lark-cli 使用指南</h1>
+        <p class="subtitle">
+          飞书/Lark 官方 CLI 工具，让人类和 AI Agent 都能在终端中操作飞书。
+          覆盖消息、文档、多维表格、电子表格、幻灯片、日历、邮箱、任务、会议、Markdown 等核心业务域，
+          提供 <strong>200+ 命令</strong> 及 <strong>26 个 AI Agent Skills</strong>。
+        </p>
+        <div class="badges">
+          <span class="badge badge-primary">Go ≥1.23</span>
+          <span class="badge badge-accent">MIT License</span>
+          <span class="badge badge-success">npm 安装</span>
+          <span class="badge">18 业务域</span>
+          <span class="badge">200+ 命令</span>
+        </div>
+      </header>
+
+      <!-- ====== 1. 项目概述 ====== -->
+      <section id="overview">
+        <h2>项目概述</h2>
+        <p>
+          <strong>lark-cli</strong> 是由 <a href="https://github.com/larksuite">larksuite</a> 团队维护的飞书/Lark 官方命令行工具，
+          采用 MIT 协议开源，支持通过 <code>npm</code> 一键安装。它的设计理念是
+          <strong>Agent-Native</strong> — 既可供人类直接在终端中使用，也可供 AI Agent（如 CodeWhale、Claude Code 等）
+          无缝调用，零额外适配即可操作飞书。
+        </p>
+
+        <div class="callout callout-insight">
+          <div class="callout-title">💡 核心设计理念</div>
+          <ul>
+            <li><strong>Agent-Native 设计</strong> — 26 个 Skills 开箱即用，适配主流 AI 工具</li>
+            <li><strong>三层调用架构</strong> — 快捷命令 → API 命令 → 通用调用，按需选择粒度</li>
+            <li><strong>AI 友好调优</strong> — 每条命令经过 Agent 实测验证，智能默认值 + 结构化输出</li>
+            <li><strong>安全可控</strong> — 输入防注入、终端输出净化、OS 原生密钥链存储凭证</li>
+            <li><strong>三分钟上手</strong> — 一键创建应用、交互式登录授权，三步完成第一次 API 调用</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ====== 2. 安装与快速开始 ====== -->
+      <section id="install">
+        <h2>安装与快速开始</h2>
+
+        <h3 id="install-human">人类用户</h3>
+
+        <h4>方式一 — 从 npm 安装（推荐）</h4>
+        <pre><code>npx @larksuite/cli@latest install</code></pre>
+
+        <h4>方式二 — 从源码安装</h4>
+        <p>需要 Go <code>v1.23</code>+ 和 Python 3。</p>
+        <pre><code>git clone https://github.com/larksuite/cli.git
+cd cli
+make install
+
+# 安装 CLI SKILL（必需）
+npx skills add larksuite/cli -y -g</code></pre>
+
+        <h4>配置与使用</h4>
+        <pre><code><span class="cm"># 1. 配置应用凭证（仅需一次，交互式引导完成）</span>
+lark-cli config init
+
+<span class="cm"># 2. 登录授权（--recommend 自动选择常用权限）</span>
+lark-cli auth login --recommend
+
+<span class="cm"># 3. 开始使用</span>
+lark-cli calendar +agenda</code></pre>
+
+        <h3 id="install-agent">AI Agent 快速开始</h3>
+        <div class="callout callout-info">
+          <div class="callout-title">🤖 AI Agent 注意</div>
+          以下步骤面向 AI Agent，部分步骤需要用户在浏览器中配合完成。
+        </div>
+
+        <pre><code><span class="cm"># 第 1 步 — 安装</span>
+npx @larksuite/cli@latest install
+
+<span class="cm"># 第 2 步 — 配置应用凭证（后台运行，提取授权链接发给用户）</span>
+lark-cli config init --new
+
+<span class="cm"># 第 3 步 — 登录（同上，后台运行，提取授权链接发给用户）</span>
+lark-cli auth login --recommend
+
+<span class="cm"># 第 4 步 — 验证</span>
+lark-cli auth status</code></pre>
+      </section>
+
+      <!-- ====== 3. 认证系统 ====== -->
+      <section id="auth">
+        <h2>认证系统</h2>
+        <p>
+          lark-cli 使用 OAuth 2.0 进行认证，支持交互式 TUI 引导选择业务域和权限级别。
+          凭证安全存储在操作系统原生密钥链中。
+        </p>
+
+        <table>
+          <tr><th>命令</th><th>说明</th></tr>
+          <tr><td><code>auth login</code></td><td>OAuth 登录，支持交互式选择或命令行参数指定 scope</td></tr>
+          <tr><td><code>auth logout</code></td><td>登出并删除已存储的凭证</td></tr>
+          <tr><td><code>auth status</code></td><td>查看当前登录状态和已授权的 scope</td></tr>
+          <tr><td><code>auth check</code></td><td>校验指定 scope（exit 0 = 有权限，1 = 缺失）</td></tr>
+          <tr><td><code>auth scopes</code></td><td>列出应用的所有可用 scope</td></tr>
+          <tr><td><code>auth list</code></td><td>列出所有已认证的用户</td></tr>
+        </table>
+
+        <h4>常用认证命令示例</h4>
+        <pre><code><span class="cm"># 交互式登录（TUI 引导选择业务域和权限级别）</span>
+lark-cli auth login
+
+<span class="cm"># 按域筛选</span>
+lark-cli auth login --domain calendar,task
+
+<span class="cm"># 推荐的自动审批 scopes</span>
+lark-cli auth login --recommend
+
+<span class="cm"># 精确 scope</span>
+lark-cli auth login --scope "calendar:calendar:read"
+
+<span class="cm"># Agent 模式：立即返回验证 URL，不阻塞</span>
+lark-cli auth login --domain calendar --no-wait
+<span class="cm"># 稍后恢复轮询</span>
+lark-cli auth login --device-code &lt;DEVICE_CODE&gt;
+
+<span class="cm"># 身份切换：以用户或机器人身份执行命令</span>
+lark-cli calendar +agenda --as user
+lark-cli im +messages-send --as bot --chat-id "oc_xxx" --text "Hello"</code></pre>
+      </section>
+
+      <!-- ====== 4. 三层命令体系 ====== -->
+      <section id="three-layer">
+        <h2>三层命令体系</h2>
+        <p>
+          CLI 提供三种粒度的调用方式，覆盖从快速操作到完全自定义的全部场景：
+        </p>
+
+        <div class="mermaid">
+graph TD
+    A[lark-cli] --> B[1. Shortcuts 快捷命令]
+    A --> C[2. API 命令]
+    A --> D[3. 通用 API 调用]
+    B --> B1["+ 前缀，人类/AI 友好"]
+    B --> B2["智能默认值，表格输出"]
+    C --> C1["OAPI 元数据自动生成"]
+    C --> C2["100+ 精选，与平台端点一一对应"]
+    D --> D1["任意飞书 API"]
+    D --> D2["覆盖 2500+ API"]
+    style B fill:#eff6ff,stroke:#2563eb
+    style C fill:#f5f3ff,stroke:#7c3aed
+    style D fill:#ecfdf5,stroke:#059669
+        </div>
+        <p class="text-muted text-sm" style="text-align:center;margin-top:-10px;margin-bottom:20px;">
+          三层命令架构：从快捷操作到完全自定义
+        </p>
+
+        <h3 id="shortcuts">1. Shortcuts 快捷命令</h3>
+        <p>
+          以 <code>+</code> 为前缀，对人类与 AI 友好化封装，内置智能默认值、表格输出和 dry-run 预览。
+        </p>
+        <pre><code>lark-cli calendar +agenda
+lark-cli im +messages-send --chat-id "oc_xxx" --text "Hello"
+lark-cli docs +create --api-version v2 --doc-format markdown --content $'&lt;title&gt;周报&lt;/title&gt;\n# 本周进展\n- 完成了 X 功能'</code></pre>
+        <p>运行 <code>lark-cli &lt;service&gt; --help</code> 查看所有快捷命令。</p>
+
+        <h3 id="api-cmd">2. API 命令</h3>
+        <p>
+          从飞书 OAPI 元数据自动生成，经过评测与准入筛选，100+ 精选命令与平台端点一一对应。
+        </p>
+        <pre><code>lark-cli calendar calendars list
+lark-cli calendar events instance_view --params '{"calendar_id":"primary","start_time":"1700000000","end_time":"1700086400"}'</code></pre>
+
+        <h3 id="raw-api">3. 通用 API 调用</h3>
+        <p>
+          直接调用任意飞书开放平台端点，覆盖 2500+ API。
+        </p>
+        <pre><code>lark-cli api GET /open-apis/calendar/v4/calendars
+lark-cli api POST /open-apis/im/v1/messages --params '{"receive_id_type":"chat_id"}' --data '{"receive_id":"oc_xxx","msg_type":"text","content":"{\"text\":\"Hello\"}"}'</code></pre>
+      </section>
+
+      <!-- ====== 5. 业务域命令参考 ====== -->
+      <section id="domain-ref">
+        <h2>业务域命令参考</h2>
+        <p>
+          lark-cli 覆盖 18 大业务域，以下列出各域的 Shortcuts 快捷命令概览。
+          每个域还包含对应的 API 命令，可通过 <code>lark-cli &lt;service&gt; --help</code> 查看完整列表。
+        </p>
+
+        <table>
+          <tr><th>业务域</th><th>服务名</th><th>Shortcuts 示例</th><th>说明</th></tr>
+          <tr>
+            <td>📅 日历</td><td><code>calendar</code></td>
+            <td><code>+agenda</code>, <code>+create</code>, <code>+update</code>, <code>+freebusy</code>, <code>+room-find</code>, <code>+rsvp</code>, <code>+suggestion</code></td>
+            <td>查看/创建/更新日程，查找会议室，忙闲查询，时间建议</td>
+          </tr>
+          <tr>
+            <td>💬 即时通讯</td><td><code>im</code></td>
+            <td><code>+messages-send</code>, <code>+messages-reply</code>, <code>+chat-create</code>, <code>+chat-list</code>, <code>+chat-search</code>, <code>+messages-search</code>, <code>+flag-*</code></td>
+            <td>发送/回复消息，群聊管理，消息搜索，标记管理</td>
+          </tr>
+          <tr>
+            <td>📄 云文档</td><td><code>docs</code></td>
+            <td><code>+create</code>, <code>+get</code>, <code>+update</code>, <code>+search</code></td>
+            <td>创建/读取/更新/搜索文档</td>
+          </tr>
+          <tr>
+            <td>📁 云空间</td><td><code>drive</code></td>
+            <td><code>+upload</code>, <code>+download</code>, <code>+search</code>, <code>+comment-*</code></td>
+            <td>上传/下载文件，搜索，管理评论</td>
+          </tr>
+          <tr>
+            <td>📝 Markdown</td><td><code>markdown</code></td>
+            <td><code>+create</code>, <code>+get</code>, <code>+patch</code>, <code>+overwrite</code></td>
+            <td>Drive 原生 .md 文件的 CRUD 操作</td>
+          </tr>
+          <tr>
+            <td>📊 多维表格</td><td><code>base</code></td>
+            <td><code>+table-*</code>, <code>+field-*</code>, <code>+record-*</code>, <code>+view-*</code></td>
+            <td>数据表/字段/记录/视图/仪表盘管理</td>
+          </tr>
+          <tr>
+            <td>📈 电子表格</td><td><code>sheets</code></td>
+            <td><code>+create</code>, <code>+read</code>, <code>+write</code>, <code>+append</code>, <code>+find</code>, <code>+export</code></td>
+            <td>电子表格数据读写操作</td>
+          </tr>
+          <tr>
+            <td>🖼️ 幻灯片</td><td><code>slides</code></td>
+            <td><code>+create</code>, <code>+get</code>, <code>+add-slide</code>, <code>+remove-slide</code></td>
+            <td>演示文稿创建与管理</td>
+          </tr>
+          <tr>
+            <td>✅ 任务</td><td><code>task</code></td>
+            <td><code>+create</code>, <code>+list</code>, <code>+update</code>, <code>+complete</code>, <code>+subtask-*</code>, <code>+comment-*</code></td>
+            <td>任务/子任务/提醒管理</td>
+          </tr>
+          <tr>
+            <td>📚 知识库</td><td><code>wiki</code></td>
+            <td><code>+space-*</code>, <code>+node-*</code>, <code>+doc-*</code></td>
+            <td>知识空间/节点/文档管理</td>
+          </tr>
+          <tr>
+            <td>👤 通讯录</td><td><code>contact</code></td>
+            <td><code>+search</code>, <code>+get</code></td>
+            <td>按姓名/邮箱/手机号搜索用户</td>
+          </tr>
+          <tr>
+            <td>📧 邮箱</td><td><code>mail</code></td>
+            <td><code>+list</code>, <code>+search</code>, <code>+read</code>, <code>+send</code>, <code>+reply</code>, <code>+forward</code>, <code>+draft-*</code>, <code>+watch</code></td>
+            <td>邮件浏览/搜索/收发/草稿/监听</td>
+          </tr>
+          <tr>
+            <td>🎥 视频会议</td><td><code>vc</code></td>
+            <td><code>+search</code>, <code>+minutes-*</code></td>
+            <td>会议记录搜索，纪要产物查询</td>
+          </tr>
+          <tr>
+            <td>🕐 考勤打卡</td><td><code>attendance</code></td>
+            <td><code>+records</code></td>
+            <td>个人考勤打卡记录查询</td>
+          </tr>
+          <tr>
+            <td>✍️ 审批</td><td><code>approval</code></td>
+            <td><code>+list</code>, <code>+approve</code>, <code>+reject</code>, <code>+transfer</code>, <code>+cancel</code>, <code>+cc</code></td>
+            <td>审批任务查询与操作</td>
+          </tr>
+          <tr>
+            <td>🎯 OKR</td><td><code>okr</code></td>
+            <td><code>+list</code>, <code>+create</code>, <code>+update</code>, <code>+objective-*</code>, <code>+keyresult-*</code></td>
+            <td>OKR 目标与关键结果管理</td>
+          </tr>
+          <tr>
+            <td>🎨 画板</td><td><code>whiteboard</code></td>
+            <td><code>+render</code></td>
+            <td>画板/图表 DSL 渲染</td>
+          </tr>
+          <tr>
+            <td>🔗 应用</td><td><code>apps</code></td>
+            <td><code>+develop</code>, <code>+deploy</code></td>
+            <td>开发与部署 HTML/Web 应用（仅飞书品牌）</td>
+          </tr>
+        </table>
+      </section>
+
+      <!-- ====== 6. 进阶用法 ====== -->
+      <section id="advanced">
+        <h2>进阶用法</h2>
+
+        <h3 id="format">输出格式</h3>
+        <p>通过 <code>--format</code> 控制输出风格：</p>
+        <pre><code>--format json      <span class="cm"># 完整 JSON 响应（默认）</span>
+--format pretty    <span class="cm"># 人性化格式输出</span>
+--format table     <span class="cm"># 易读表格</span>
+--format ndjson    <span class="cm"># 换行分隔 JSON（适合管道处理）</span>
+--format csv       <span class="cm"># 逗号分隔值</span></code></pre>
+
+        <h3 id="pagination">分页</h3>
+        <p>控制 API 数据获取量：</p>
+        <pre><code>--page-all                  <span class="cm"># 自动翻页获取所有数据</span>
+--page-limit 5              <span class="cm"># 最多获取 5 页</span>
+--page-delay 500            <span class="cm"># 每页请求间隔 500ms</span></code></pre>
+
+        <h3 id="dryrun">Dry Run</h3>
+        <p>对可能产生副作用的命令，建议先用 <code>--dry-run</code> 预览请求：</p>
+        <pre><code>lark-cli im +messages-send --chat-id oc_xxx --text "hello" --dry-run</code></pre>
+
+        <h3 id="schema">Schema 自省</h3>
+        <p>使用 <code>schema</code> 查看任意 API 方法的参数、请求体、响应结构、支持身份和 scopes：</p>
+        <pre><code>lark-cli schema
+lark-cli schema calendar.events.instance_view
+lark-cli schema im.messages.delete</code></pre>
+      </section>
+
+      <!-- ====== 7. Agent Skills ====== -->
+      <section id="agent-skills">
+        <h2>Agent Skills</h2>
+        <p>
+          lark-cli 提供 26 个 AI Agent Skills，每个 Skill 封装了一个业务域的操作能力。
+          适用于 CodeWhale、Claude Code 等 AI 工具。
+        </p>
+
+        <table>
+          <tr><th>Skill</th><th>说明</th></tr>
+          <tr><td><code>lark-shared</code></td><td>应用配置、认证登录、身份切换、权限管理（所有其他 skill 自动加载）</td></tr>
+          <tr><td><code>lark-calendar</code></td><td>日历日程、议程查看、忙闲查询、时间建议、会议室查找</td></tr>
+          <tr><td><code>lark-im</code></td><td>发送/回复消息、群聊管理、消息搜索、上传下载图片与文件</td></tr>
+          <tr><td><code>lark-doc</code></td><td>创建、读取、更新、搜索文档</td></tr>
+          <tr><td><code>lark-drive</code></td><td>上传、下载文件，管理权限与评论</td></tr>
+          <tr><td><code>lark-markdown</code></td><td>Drive 原生 Markdown 文件的 CRUD 与 patch</td></tr>
+          <tr><td><code>lark-sheets</code></td><td>电子表格数据的全操作</td></tr>
+          <tr><td><code>lark-slides</code></td><td>演示文稿的创建与管理</td></tr>
+          <tr><td><code>lark-base</code></td><td>多维表格、字段、记录、视图、仪表盘管理</td></tr>
+          <tr><td><code>lark-task</code></td><td>任务、任务清单、子任务、提醒</td></tr>
+          <tr><td><code>lark-mail</code></td><td>邮件浏览/收发/草稿/监听</td></tr>
+          <tr><td><code>lark-contact</code></td><td>按姓名/邮箱/手机号搜索用户</td></tr>
+          <tr><td><code>lark-wiki</code></td><td>知识空间、节点、文档</td></tr>
+          <tr><td><code>lark-event</code></td><td>实时事件订阅（WebSocket），正则路由</td></tr>
+          <tr><td><code>lark-vc</code></td><td>会议记录搜索、纪要产物查询</td></tr>
+          <tr><td><code>lark-minutes</code></td><td>妙记元数据与 AI 产物，上传音视频</td></tr>
+          <tr><td><code>lark-attendance</code></td><td>个人考勤打卡记录查询</td></tr>
+          <tr><td><code>lark-approval</code></td><td>审批任务查询与操作</td></tr>
+          <tr><td><code>lark-okr</code></td><td>OKR 目标与关键结果管理</td></tr>
+          <tr><td><code>lark-whiteboard</code></td><td>画板/图表 DSL 渲染</td></tr>
+          <tr><td><code>lark-openapi-explorer</code></td><td>从官方文档探索底层 API</td></tr>
+          <tr><td><code>lark-skill-maker</code></td><td>自定义 skill 创建框架</td></tr>
+          <tr><td><code>lark-workflow-meeting-summary</code></td><td>会议纪要汇总与结构化报告</td></tr>
+          <tr><td><code>lark-workflow-standup-report</code></td><td>日程待办摘要</td></tr>
+        </table>
+      </section>
+
+      <!-- ====== 8. 安全提示 ====== -->
+      <section id="security">
+        <h2>安全与风险提示</h2>
+        <div class="callout callout-danger">
+          <div class="callout-title">⚠️ 使用前必读</div>
+          <p>
+            本工具可供 AI Agent 调用以自动化操作飞书/Lark 开放平台，存在模型幻觉、执行不可控、
+            提示词注入等固有风险；授权飞书权限后，AI Agent 将以您的用户身份在授权范围内执行操作，
+            可能导致敏感数据泄露、越权操作等高风险后果，请谨慎操作和使用。
+          </p>
+          <p>
+            为降低风险，工具已在多个层面启用默认安全保护，但上述风险仍然存在。
+            强烈建议不要主动修改任何默认安全配置；一旦放开相关限制，风险将显著提高。
+          </p>
+          <p>
+            建议将对接本工具的飞书机器人作为私人对话助手使用，请勿将其拉入群聊或允许其他用户与其交互。
+          </p>
+          <p><strong>使用本工具即视为您自愿承担相关所有责任。</strong></p>
+        </div>
+      </section>
+
+      <!-- Page Nav -->
+      <div class="page-nav">
+        <span></span>
+        <a href="source.html">源码解析 →</a>
+        <span class="text-muted text-sm">— lark-cli 使用指南 · v1.0 —</span>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Mobile sidebar toggle -->
+  <script>
+    (function () {
+      if (window.innerWidth > 1024) return;
+      const btn = document.createElement('button');
+      btn.textContent = '☰ 目录';
+      btn.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:200;padding:10px 16px;border-radius:24px;border:none;background:var(--color-primary);color:#fff;font-size:14px;font-weight:600;cursor:pointer;box-shadow:var(--shadow-lg);';
+      btn.onclick = function () {
+        document.getElementById('sidebar').classList.toggle('open');
+      };
+      document.body.appendChild(btn);
+    })();
+  </script>
+</body>
+</html>
