@@ -1,0 +1,41 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Browser 浏览器模式 · Vitest 深度解构</title><link rel="stylesheet" href="style.css"></head><body><div class="layout"><aside class="sidebar" id="sidebar"><div class="sidebar-header">Vitest 解构</div><div class="sidebar-title"><a href="index.html">← Vitest</a></div><ul class="sidebar-nav"><li><a href="#overview">模块概览</a></li><li><a href="#architecture">架构设计</a></li><li><a href="#provider">浏览器 Provider</a></li><li><a href="#sandbox">iframe 沙箱</a></li><li><a href="#websocket">WebSocket 通信</a></li><li><a href="#contrast">如果我来写</a></li></ul></aside><main class="main" id="main-content"><div class="page-header"><h1>🌐 Browser 浏览器模式</h1><p class="subtitle">在真实浏览器中运行测试——Playwright/WebDriverIO 集成、iframe 沙箱、组件测试。</p><div class="badges"><span class="badge badge-primary">特性模块</span><span class="badge">多子包</span><span class="badge badge-accent">Playwright + WebDriverIO</span></div></div>
+
+<section id="overview"><h2>1. 模块定位</h2><p>Browser 模式是 Vitest 区别于 Jest 的核心特性之一。它允许测试在<strong>真实浏览器环境</strong>中运行，而不是在 Node.js 中模拟 DOM（jsdom/happy-dom）。这对组件测试、Web API 测试（如 IndexedDB、Canvas、WebSocket）至关重要。</p>
+<p>三个子包协作：</p>
+<ul><li><code>@vitest/browser</code> — 浏览器模式核心（iframe 管理、WebSocket 通信）</li><li><code>@vitest/browser-playwright</code> — Playwright 浏览器提供者</li><li><code>@vitest/browser-webdriverio</code> — WebdriverIO 浏览器提供者</li></ul></section>
+
+<section id="architecture"><h2>2. 架构设计</h2>
+<pre class="mermaid">sequenceDiagram
+    participant M as Main Process
+    participant CDP as CDP/WebDriver
+    participant B as Browser
+    participant I as iframe
+
+    M-&gt;&gt;CDP: 启动浏览器
+    CDP--&gt;&gt;B: browser ready
+    M-&gt;&gt;B: 创建 page
+    B-&gt;&gt;I: 创建 iframe (sandbox)
+    M-&gt;&gt;I: WebSocket 连接
+    I--&gt;&gt;M: 注入 vitest runtime
+    M-&gt;&gt;I: import 测试文件
+    I-&gt;&gt;I: 执行测试
+    I--&gt;&gt;M: 测试结果 (WebSocket)
+</pre><p class="mermaid-caption">图：浏览器模式架构 —— iframe 沙箱 + WebSocket 双向通信</p></section>
+
+<section id="provider"><h2>3. 浏览器 Provider</h2>
+<p>两个 Provider 实现提供了不同的浏览器控制协议：</p>
+<table><tr><th>Provider</th><th>协议</th><th>浏览器</th></tr><tr><td>Playwright</td><td>CDP (Chrome DevTools Protocol)</td><td>Chromium / Firefox / WebKit</td></tr><tr><td>WebdriverIO</td><td>WebDriver 协议</td><td>Chrome / Safari / Edge / 移动端</td></tr></table>
+<p>Provider 负责：启动浏览器实例、创建 page、管理 iframe、注入脚本、转发日志和错误。</p></section>
+
+<section id="sandbox"><h2>4. iframe 沙箱</h2>
+<p>每个测试文件在独立的 <code>&lt;iframe sandbox&gt;</code> 中运行，提供完全的 DOM/CSS/JS 隔离。iframe 内部加载 vitest 的浏览器端 runtime，通过 <code>import()</code> 加载测试文件。</p>
+<p>iframe 的 <code>sandbox</code> 属性提供安全隔离——默认限制脚本执行、表单提交、弹窗等。Vitest 根据需要动态调整 sandbox 权限（如 <code>allow-scripts</code>、<code>allow-same-origin</code>）。</p></section>
+
+<section id="websocket"><h2>5. WebSocket 通信</h2>
+<p>iframe 与主进程通过 <strong>WebSocket</strong> 进行双向通信。通信协议使用 <code>birpc</code>——与 Worker 池相同的 RPC 机制：</p>
+<ul><li>主进程 → iframe：发送测试文件列表、配置、<code>startTests</code> 指令</li><li>iframe → 主进程：返回测试结果、日志、错误信息</li></ul>
+<p>这种设计让浏览器模式与 Worker 模式共享相同的测试执行逻辑——<strong>唯一的区别是模块加载方式</strong>。</p></section>
+
+<section id="contrast"><h2>6. "如果我来写" 对比思考</h2>
+<div class="callout callout-insight"><div class="callout-title">🧠 问题：iframe 沙箱 vs 直接控制浏览器？</div><p><strong>直觉方案</strong>：在 page 直接运行测试——不需要 iframe 隔离。</p><p><strong>Vitest 的做法</strong>：每个测试文件在自己的 iframe 中运行，通过 <code>sandbox</code> 属性隔离。</p><p><strong>差异分析</strong>：直接运行虽然简单，但多个测试文件之间会出现状态污染——DOM 修改、全局变量、事件监听器等。iframe 沙箱提供了<strong>接近原生进程级别的隔离</strong>，代价是每次需要重新加载 vitest runtime。这是一种经典的"空间换正确性"的权衡。</p></div></section>
+<div class="page-nav"><a href="module-snapshot.html">← Snapshot 快照系统</a><a href="index.html">返回总览 →</a></div></main></div><script>(function(){if(window.innerWidth>1024)return;var s=document.getElementById('sidebar'),b=document.createElement('div');b.className='sidebar-backdrop';b.onclick=function(){s.classList.remove('open');b.classList.remove('open')};document.body.appendChild(b);var btn=document.createElement('button');btn.textContent='☰ 目录';btn.style.cssText='position:fixed;bottom:20px;right:20px;z-index:200;padding:10px 16px;border-radius:24px;border:none;background:var(--color-primary);color:#fff;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.2)';btn.onclick=function(){s.classList.toggle('open');b.classList.toggle('open')};document.body.appendChild(btn)})()</script></body></html>

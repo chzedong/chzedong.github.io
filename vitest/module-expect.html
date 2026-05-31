@@ -1,0 +1,72 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Expect 断言系统 · Vitest 深度解构</title><link rel="stylesheet" href="style.css"></head><body><div class="layout"><aside class="sidebar" id="sidebar"><div class="sidebar-header">Vitest 解构</div><div class="sidebar-title"><a href="index.html">← Vitest</a></div><ul class="sidebar-nav"><li><a href="#overview">模块概览</a></li><li><a href="#dual-api">双 API 设计</a></li><li><a href="#asymmetric">非对称匹配器</a></li><li><a href="#extend">自定义匹配器扩展</a></li><li><a href="#state">断言状态管理</a></li><li><a href="#contrast">如果我来写</a></li><li><a href="#summary">学习要点</a></li></ul></aside><main class="main" id="main-content"><div class="page-header"><h1>✅ Expect 断言系统</h1><p class="subtitle"><code>@vitest/expect</code> — Jest expect + Chai 双 API 兼容，非对称匹配器，自定义扩展。</p><div class="badges"><span class="badge badge-primary">核心模块</span><span class="badge">12 源文件</span><span class="badge badge-accent">双 API 桥接</span></div></div>
+
+<section id="overview"><h2>1. 模块定位</h2><p>Expect 模块是 Vitest 的断言层，它面临一个独特的设计约束：<strong>同时兼容 Jest 的 <code>expect</code> API 和 Chai 的 <code>assert</code> 风格</strong>。这意味着它不能简单地包装 Chai，而需要建立一个桥接层来统一两种断言范式。</p></section>
+
+<section id="dual-api"><h2>2. 双 API 设计</h2>
+<table><tr><th>API 风格</th><th>示例</th><th>来源</th></tr><tr><td>Jest expect</td><td><code>expect(x).toBe(y)</code></td><td>内置实现 + Chai 垫片</td></tr><tr><td>Chai assert</td><td><code>assert.equal(x, y)</code></td><td>直接暴露 <code>chai</code> 模块</td></tr><tr><td>Chai BDD</td><td><code>expect(x).to.equal(y)</code></td><td>Chai 的 BDD 风格</td></tr></table>
+
+<div class="code-ref"><div class="code-ref__header"><span class="code-ref__path">packages/expect/src/index.ts</span><a class="code-ref__link" href="vscode://file/Users/chenzedong/Desktop/zedong/vitest/packages/expect/src/index.ts:1:0">IDE 打开</a></div><pre><code><span class="cm">// ★ Expect 模块导出：Jest + Chai 双 API 统一暴露</span>
+<span class="kw">export</span> { ChaiStyleAssertions } <span class="kw">from</span> <span class="str">'./chai-style-assertions'</span>
+<span class="kw">export</span> { JestChaiExpect }    <span class="kw">from</span> <span class="str">'./jest-expect'</span>        <span class="cm">// Jest → Chai 适配器</span>
+<span class="kw">export</span> { JestExtend }        <span class="kw">from</span> <span class="str">'./jest-extend'</span>
+<span class="kw">export</span> { JestAsymmetricMatchers } <span class="kw">from</span> <span class="str">'./jest-asymmetric-matchers'</span>
+<span class="kw">export</span> * <span class="kw">as</span> chai           <span class="kw">from</span> <span class="str">'chai'</span>              <span class="cm">// ★ 直接暴露 Chai</span></code></pre></div>
+
+<p><strong>核心适配器</strong>：<code>JestChaiExpect</code> 是将 Jest 风格断言（如 <code>expect(x).toBe(y)</code>）映射到 Chai 内部的桥梁。每个 Jest 风格的匹配器方法（<code>toBe</code>, <code>toEqual</code>, <code>toContain</code> 等）实际上调用 Chai 的底层断言机制。</p></section>
+
+<section id="asymmetric"><h2>3. 非对称匹配器</h2>
+<p>非对称匹配器（Asymmetric Matchers）允许在 <code>expect</code> 中做<strong>部分匹配</strong>——不要求完全相等，只验证值的部分属性。典型用法：</p>
+<pre><code><span class="fn">expect</span>(user).toEqual(
+  <span class="fn">expect</span>.<span class="fn">objectContaining</span>({ name: <span class="str">'Alice'</span> })
+  <span class="cm">// ★ 只验证 user.name，忽略其他属性</span>
+)</code></pre>
+
+<table><tr><th>匹配器</th><th>用途</th></tr><tr><td><code>expect.any(Constructor)</code></td><td>匹配任意该类型的值</td></tr><tr><td><code>expect.anything()</code></td><td>匹配任意非 null/undefined 值</td></tr><tr><td><code>expect.arrayContaining(arr)</code></td><td>数组包含指定元素</td></tr><tr><td><code>expect.objectContaining(obj)</code></td><td>对象包含指定属性</td></tr><tr><td><code>expect.stringContaining(str)</code></td><td>字符串包含子串</td></tr><tr><td><code>expect.stringMatching(regexp)</code></td><td>字符串匹配正则</td></tr><tr><td><code>expect.schemaMatching(schema)</code></td><td>模式匹配（Vitest 扩展）</td></tr></ul>
+
+<div class="code-ref"><div class="code-ref__header"><span class="code-ref__path">packages/expect/src/jest-asymmetric-matchers.ts</span></div><pre><code><span class="cm">// ★ AsymmetricMatcher 基类：所有非对称匹配器的父类</span>
+<span class="kw">export class</span> <span class="type">AsymmetricMatcher</span>&lt;T&gt; {
+  $$<span class="kw">typeof</span> = <span class="fn">Symbol</span>.<span class="fn">for</span>(<span class="str">'jest.asymmetricMatcher'</span>)
+  <span class="kw">constructor</span>(<span class="kw">protected</span> sample: T) {}
+  asymmetricMatch(other: unknown): <span class="type">boolean</span> { <span class="cm">/* 子类实现 */</span> }
+}
+
+<span class="kw">export class</span> <span class="type">ObjectContaining</span> <span class="kw">extends</span> <span class="type">AsymmetricMatcher</span>&lt;Record&lt;string, unknown&gt;&gt; {
+  asymmetricMatch(other) {
+    <span class="kw">return</span> Object.keys(<span class="kw">this</span>.sample)
+      .every(key =&gt; <span class="fn">equals</span>(<span class="kw">this</span>.sample[key], other[key]))
+  }
+}</code></pre></div></section>
+
+<section id="extend"><h2>4. 自定义匹配器扩展</h2>
+<p>通过 <code>expect.extend(matchers)</code>，用户可以向 <code>expect</code> 注入自定义断言方法。扩展的匹配器函数接收 <code>received</code> 值和参数，返回 <code>{ pass, message }</code> 结构。</p>
+<pre><code><span class="fn">expect</span>.<span class="fn">extend</span>({
+  toBeWithinRange(received, floor, ceiling) {
+    <span class="kw">const</span> pass = received &gt;= floor &amp;&amp; received &lt;= ceiling
+    <span class="kw">return</span> {
+      pass,
+      message: () =&gt; pass
+        ? <span class="fn">`expected </span><span class="str">${received}</span><span class="fn"> not to be within range </span><span class="str">${floor}</span><span class="fn"> - </span><span class="str">${ceiling}</span><span class="fn">`</span>
+        : <span class="fn">`expected </span><span class="str">${received}</span><span class="fn"> to be within range </span><span class="str">${floor}</span><span class="fn"> - </span><span class="str">${ceiling}</span><span class="fn">`</span>,
+    }
+  },
+})</code></pre>
+<p>这个扩展 API 来自 <code>packages/expect/src/jest-extend.ts</code>，它动态地在 <code>expect</code> 对象上注册新的匹配器方法。</p></section>
+
+<section id="state"><h2>5. 断言状态管理</h2>
+<p><code>packages/expect/src/state.ts</code> 管理断言的运行时状态，包括 <code>isNot</code> 标志（<code>expect(x).not.toBe(y)</code>）和 <code>promise</code> 标志（<code>expect(promise).resolves.toBe(y)</code>）。</p>
+<div class="code-ref"><div class="code-ref__header"><span class="code-ref__path">packages/expect/src/state.ts</span></div><pre><code><span class="kw">let</span> currentState: ExpectState = {
+  isNot: <span class="kw">false</span>,      <span class="cm">// .not 修饰符</span>
+  promise: <span class="str">''</span>,        <span class="cm">// .resolves / .rejects</span>
+  actual: <span class="kw">undefined</span>,  <span class="cm">// 当前值</span>
+  expected: <span class="kw">undefined</span>, <span class="cm">// 期望值</span>
+}
+<span class="kw">export function</span> <span class="fn">getState</span>(): ExpectState { <span class="kw">return</span> currentState }
+<span class="kw">export function</span> <span class="fn">setState</span>(state: ExpectState) { currentState = state }</code></pre></div></section>
+
+<section id="contrast"><h2>6. "如果我来写" 对比思考</h2>
+
+<div class="callout callout-insight"><div class="callout-title">🧠 问题：如何同时兼容 Jest 和 Chai？</div><p><strong>直觉方案</strong>：选择其中一个 API，暴露所有方法。另一个用适配器层覆盖。</p><p><strong>Vitest 的做法</strong>：Chai 是底层引擎（提供 <code>assert</code> / <code>expect</code> / <code>should</code> 风格），JestChaiExpect 是一个<strong>属性代理层</strong>——它将 Jest 风格的方法名（如 <code>toBe</code>）映射到 Chai 的内部属性（如 <code>equal</code>）。用户可以使用 <code>import { assert } from 'vitest'</code> 直接拿到 Chai 的 assert。</p><p><strong>差异分析</strong>：这保证了 <strong>Jest 生态的兼容性</strong>（用户迁移成本极低）同时 <strong>保留了 Chai 的表达力</strong>（<code>to.be.above</code>、<code>to.have.length</code> 等链式调用）。</p></div></section>
+
+<section id="summary"><h2>7. 学习要点</h2>
+<table><tr><th>🏗️ 学习主题</th><th>关键收获</th></tr><tr><td>双 API 桥接</td><td>Chai 作引擎 + Jest 适配层——保持两个社区的兼容性</td></tr><tr><td>非对称匹配器</td><td>继承 <code>AsymmetricMatcher</code> 基类 —— 部分匹配模式</td></tr><tr><td>自定义扩展</td><td><code>expect.extend()</code> 运行时注入——开放封闭原则</td></tr><tr><td>状态管理</td><td><code>.not</code> / <code>.resolves</code> / <code>.rejects</code> 通过状态标志实现</td></tr></table>
+<div class="page-nav"><a href="module-mocker.html">← Mocker 模块模拟</a><a href="module-core.html">Vitest 核心架构 →</a></div></section></main></div><script>(function(){if(window.innerWidth>1024)return;var s=document.getElementById('sidebar'),b=document.createElement('div');b.className='sidebar-backdrop';b.onclick=function(){s.classList.remove('open');b.classList.remove('open')};document.body.appendChild(b);var btn=document.createElement('button');btn.textContent='☰ 目录';btn.style.cssText='position:fixed;bottom:20px;right:20px;z-index:200;padding:10px 16px;border-radius:24px;border:none;background:var(--color-primary);color:#fff;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.2)';btn.onclick=function(){s.classList.toggle('open');b.classList.toggle('open')};document.body.appendChild(btn)})()</script></body></html>

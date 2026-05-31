@@ -1,0 +1,39 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Snapshot 快照系统 · Vitest 深度解构</title><link rel="stylesheet" href="style.css"></head><body><div class="layout"><aside class="sidebar" id="sidebar"><div class="sidebar-header">Vitest 解构</div><div class="sidebar-title"><a href="index.html">← Vitest</a></div><ul class="sidebar-nav"><li><a href="#overview">模块概览</a></li><li><a href="#manager">SnapshotManager</a></li><li><a href="#inline">内联快照</a></li><li><a href="#serializer">快照序列化</a></li><li><a href="#summary">学习要点</a></li></ul></aside><main class="main" id="main-content"><div class="page-header"><h1>📸 Snapshot 快照系统</h1><p class="subtitle"><code>@vitest/snapshot</code> — 快照存储、比对、更新、内联快照、环境适配。</p><div class="badges"><span class="badge badge-primary">特性模块</span><span class="badge">14 源文件</span><span class="badge badge-accent">Jest 兼容</span></div></div>
+
+<section id="overview"><h2>1. 模块定位</h2><p>Snapshot 模块实现了 Jest 兼容的快照测试功能。它负责快照文件的<strong>存储、读取、比对和更新</strong>。同时支持传统的文件快照（<code>__snapshots__/*.snap</code>）和内联快照（快照值直接写入源码）。</p></section>
+
+<section id="manager"><h2>2. SnapshotManager</h2>
+<p><code>SnapshotManager</code> 是快照系统的核心管理类。它维护一个 <code>SnapshotSummary</code> 对象来跟踪全局快照状态：</p>
+<ul><li><code>added</code> — 新增快照数</li><li><code>updated</code> — 更新快照数</li><li><code>matched</code> — 匹配成功数</li><li><code>unmatched</code> — 不匹配数</li><li><code>filesAdded / filesUpdated / filesRemoved</code> — 文件级变更统计</li></ul>
+
+<div class="code-ref"><div class="code-ref__header"><span class="code-ref__path">packages/snapshot/src/manager.ts:8-42</span><a class="code-ref__link" href="vscode://file/Users/chenzedong/Desktop/zedong/vitest/packages/snapshot/src/manager.ts:8:0">IDE 打开</a></div><pre><code><span class="kw">export class</span> <span class="type">SnapshotManager</span> {
+  summary!: SnapshotSummary
+  extension = <span class="str">'.snap'</span>
+  <span class="kw">constructor</span>(options) { <span class="kw">this</span>.<span class="fn">clear</span>() }
+  clear() { <span class="kw">this</span>.summary = <span class="fn">emptySummary</span>(<span class="kw">this</span>.options) }
+  add(result) { <span class="fn">addSnapshotResult</span>(<span class="kw">this</span>.summary, result) }
+
+  <span class="cm">// ★ 快照路径解析策略</span>
+  resolvePath(testPath, context?) {
+    <span class="kw">return</span> <span class="fn">join</span>(<span class="fn">dirname</span>(testPath), <span class="str">'__snapshots__'</span>, <span class="fn">basename</span>(testPath) + <span class="str">'.snap'</span>)
+  }
+}</code></pre></div></section>
+
+<section id="inline"><h2>3. 内联快照</h2>
+<p>内联快照（Inline Snapshot）是 Vitest 的独特能力——快照值直接存在测试源码中，由 <code>--update</code> 标志自动更新源码文件：</p>
+<pre><code><span class="fn">expect</span>({ name: <span class="str">'Alice'</span> }).<span class="fn">toMatchInlineSnapshot</span>(<span class="str">`
+  {
+    "name": "Alice",
+  }
+`</span>)</code></pre>
+
+<p>实现位于 <code>packages/snapshot/src/port/inlineSnapshot.ts</code>，它使用 <code>MagicString</code> 进行源码修改——精确定位 <code>toMatchInlineSnapshot()</code> 调用的 AST 节点，替换其中的快照字面量。</p></section>
+
+<section id="serializer"><h2>4. 快照序列化</h2>
+<p><code>packages/snapshot/src/port/rawSnapshot.ts</code> 负责将快照对象序列化为 <code>.snap</code> 文件格式。它使用 <code>@vitest/pretty-format</code> 进行格式化输出（类 Jest 的 <code>pretty-format</code>），并提供序列化器（Serializer）机制支持自定义对象的格式转换。</p>
+<p>快照环境接口（<code>SnapshotEnvironment</code>）定义了跨平台的文件操作抽象：</p>
+<ul><li><code>readSnapshotFile(path)</code> — 读取快照文件</li><li><code>saveSnapshotFile(path, content)</code> — 写入快照文件</li><li><code>resolvePath(path)</code> — 路径解析</li></ul></section>
+
+<section id="summary"><h2>5. 学习要点</h2>
+<table><tr><th>🏗️ 学习主题</th><th>关键收获</th></tr><tr><td>快照存储策略</td><td>默认路径 <code>__snapshots__/testFile.snap</code> + 可自定义解析器</td></tr><tr><td>内联快照</td><td>MagicString AST 改写——源码中嵌入快照值</td></tr><tr><td>环境抽象</td><td>SnapshotEnvironment 接口——解耦文件系统依赖</td></tr><tr><td>序列化器</td><td>pretty-format + 自定义插件——可扩展的值格式化</td></tr></table>
+<div class="page-nav"><a href="module-core.html">← Vitest 核心架构</a><a href="module-browser.html">Browser 浏览器模式 →</a></div></section></main></div><script>(function(){if(window.innerWidth>1024)return;var s=document.getElementById('sidebar'),b=document.createElement('div');b.className='sidebar-backdrop';b.onclick=function(){s.classList.remove('open');b.classList.remove('open')};document.body.appendChild(b);var btn=document.createElement('button');btn.textContent='☰ 目录';btn.style.cssText='position:fixed;bottom:20px;right:20px;z-index:200;padding:10px 16px;border-radius:24px;border:none;background:var(--color-primary);color:#fff;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.2)';btn.onclick=function(){s.classList.toggle('open');b.classList.toggle('open')};document.body.appendChild(btn)})()</script></body></html>

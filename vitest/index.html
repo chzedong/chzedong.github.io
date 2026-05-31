@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vitest — 下一代测试框架 · 深度解构</title>
+  <style>
+    :root {
+      --color-bg: #ffffff;
+      --color-bg-secondary: #f8f9fa;
+      --color-bg-tertiary: #f1f3f5;
+      --color-text: #1a1a2e;
+      --color-text-secondary: #495057;
+      --color-text-muted: #868e96;
+      --color-border: #dee2e6;
+      --color-border-light: #e9ecef;
+      --color-primary: #2563eb;
+      --color-primary-light: #eff6ff;
+      --color-primary-dark: #1d4ed8;
+      --color-accent: #7c3aed;
+      --color-accent-light: #f5f3ff;
+      --color-success: #059669;
+      --color-success-bg: #ecfdf5;
+      --color-warning: #d97706;
+      --color-warning-bg: #fffbeb;
+      --color-danger: #dc2626;
+      --color-danger-bg: #fef2f2;
+      --color-info: #0891b2;
+      --color-info-bg: #ecfeff;
+      --color-code-bg: #f1f5f9;
+      --color-code-text: #1e293b;
+      --color-inline-code-bg: #f1f5f9;
+      --color-inline-code-text: #e11d48;
+      --sidebar-width: 260px;
+      --max-content-width: 860px;
+      --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans SC", sans-serif;
+      --font-mono: "SF Mono", "Fira Code", "Consolas", monospace;
+      --radius: 8px;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07);
+      --transition: 150ms ease;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --color-bg: #0f172a; --color-bg-secondary: #1e293b; --color-bg-tertiary: #334155;
+        --color-text: #e2e8f0; --color-text-secondary: #94a3b8; --color-text-muted: #64748b;
+        --color-border: #334155; --color-border-light: #1e293b;
+        --color-primary: #3b82f6; --color-primary-light: #1e3a5f; --color-primary-dark: #60a5fa;
+        --color-accent: #8b5cf6; --color-accent-light: #2e1065;
+        --color-success: #10b981; --color-success-bg: #064e3b;
+        --color-warning: #f59e0b; --color-warning-bg: #451a03;
+        --color-danger: #f87171; --color-danger-bg: #450a0a;
+        --color-info: #22d3ee; --color-info-bg: #083344;
+        --color-code-bg: #1e293b; --color-code-text: #e2e8f0;
+        --color-inline-code-bg: #334155; --color-inline-code-text: #f87171;
+      }
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth;scroll-padding-top:80px}
+    body{font-family:var(--font-sans);font-size:15px;line-height:1.7;color:var(--color-text);background:var(--color-bg);-webkit-font-smoothing:antialiased}
+    .layout{display:flex;min-height:100vh}
+    .sidebar{position:fixed;top:0;left:0;width:var(--sidebar-width);height:100vh;background:var(--color-bg-secondary);border-right:1px solid var(--color-border);overflow-y:auto;padding:24px 20px;z-index:100}
+    .sidebar-header{font-size:13px;font-weight:600;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--color-border)}
+    .sidebar-title{font-size:16px;font-weight:700;color:var(--color-text);margin-bottom:20px;line-height:1.3}
+    .sidebar-title a{color:inherit;text-decoration:none}
+    .sidebar-nav{list-style:none}
+    .sidebar-nav li{margin-bottom:2px}
+    .sidebar-nav a{display:block;padding:6px 12px;border-radius:6px;color:var(--color-text-secondary);text-decoration:none;font-size:14px;transition:all var(--transition)}
+    .sidebar-nav a:hover{background:var(--color-bg-tertiary);color:var(--color-text)}
+    .main{margin-left:var(--sidebar-width);flex:1;max-width:var(--max-content-width);padding:48px 56px 80px}
+    .page-header{margin-bottom:40px;padding-bottom:32px;border-bottom:1px solid var(--color-border)}
+    .page-header h1{font-size:32px;font-weight:800;line-height:1.2;color:var(--color-text);margin-bottom:12px;letter-spacing:-.02em}
+    .page-header .subtitle{font-size:17px;color:var(--color-text-secondary);line-height:1.6;margin-bottom:16px}
+    .badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+    .badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:500;background:var(--color-bg-tertiary);color:var(--color-text-secondary)}
+    .badge-primary{background:var(--color-primary-light);color:var(--color-primary)}
+    .badge-accent{background:var(--color-accent-light);color:var(--color-accent)}
+    .badge-success{background:var(--color-success-bg);color:var(--color-success)}
+    section{margin-bottom:48px}
+    section h2{font-size:24px;font-weight:700;margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid var(--color-border-light)}
+    section h3{font-size:19px;font-weight:600;margin-top:28px;margin-bottom:12px}
+    section p{margin-bottom:14px;color:var(--color-text-secondary)}
+    section ul,section ol{margin-bottom:14px;padding-left:24px;color:var(--color-text-secondary)}
+    section li{margin-bottom:6px}
+    section a{color:var(--color-primary);text-decoration:none}
+    section a:hover{text-decoration:underline}
+    .code-ref{border:1px solid var(--color-border);border-radius:var(--radius);margin-bottom:20px;overflow:hidden}
+    .code-ref__header{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:var(--color-bg-tertiary);border-bottom:1px solid var(--color-border-light);font-size:12px}
+    .code-ref__path{font-family:var(--font-mono);color:var(--color-text-muted);font-weight:500}
+    .code-ref__link{color:var(--color-primary);text-decoration:none;font-weight:600;font-size:12px}
+    .code-ref pre{margin:0;border:none;border-radius:0}
+    .arch-highlight{padding:20px 24px;border-radius:var(--radius);background:var(--color-accent-light);border-left:4px solid var(--color-accent);margin-bottom:20px}
+    .arch-highlight h4{margin-top:0;color:var(--color-accent)}
+    code{font-family:var(--font-mono);font-size:13px;background:var(--color-inline-code-bg);color:var(--color-inline-code-text);padding:2px 6px;border-radius:4px}
+    pre{background:var(--color-code-bg);color:var(--color-code-text);border-radius:var(--radius);padding:20px 24px;overflow-x:auto;margin-bottom:18px;border:1px solid var(--color-border-light);font-size:13px;line-height:1.6}
+    pre code{background:none;color:inherit;padding:0;font-size:inherit}
+    .callout{padding:16px 20px;border-radius:var(--radius);margin-bottom:18px;border-left:4px solid;font-size:14px}
+    .callout-title{font-weight:600;margin-bottom:4px}
+    .callout-insight{background:var(--color-accent-light);border-color:var(--color-accent)}
+    .callout-tip{background:var(--color-success-bg);border-color:var(--color-success)}
+    .callout-info{background:var(--color-info-bg);border-color:var(--color-info)}
+    table{width:100%;border-collapse:collapse;margin-bottom:18px;font-size:14px}
+    th,td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--color-border-light)}
+    th{font-weight:600;background:var(--color-bg-secondary);font-size:13px;text-transform:uppercase;letter-spacing:.03em}
+    td{color:var(--color-text-secondary)}
+    .module-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-bottom:24px}
+    .module-card{padding:20px;border:1px solid var(--color-border);border-radius:var(--radius);transition:all var(--transition);text-decoration:none;color:inherit;display:block}
+    .module-card:hover{border-color:var(--color-primary);box-shadow:var(--shadow-md);text-decoration:none}
+    .module-card h4{font-size:17px;font-weight:700;color:var(--color-text);margin:0 0 6px}
+    .module-card p{font-size:14px;color:var(--color-text-muted);margin:0}
+    .module-card .tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;background:var(--color-primary-light);color:var(--color-primary);margin-top:8px}
+    .reading-path{list-style:none;padding:0;margin-bottom:20px}
+    .reading-path li{display:flex;align-items:baseline;gap:12px;padding:10px 14px;margin-bottom:4px;border-radius:6px;background:var(--color-bg-secondary);font-size:14px}
+    .reading-path .step-num{flex-shrink:0;width:24px;height:24px;border-radius:50%;background:var(--color-primary);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+    .reading-path .step-file{font-family:var(--font-mono);font-weight:600;color:var(--color-text);min-width:200px}
+    .reading-path .step-desc{color:var(--color-text-secondary)}
+    .dir-tree{font-family:var(--font-mono);font-size:13px;line-height:1.8;color:var(--color-text-secondary);background:var(--color-code-bg);padding:16px 20px;border-radius:var(--radius);margin-bottom:18px;white-space:pre;overflow-x:auto;border:1px solid var(--color-border-light)}
+    .flow-steps{counter-reset:step;list-style:none;padding:0;margin-bottom:20px}
+    .flow-steps li{counter-increment:step;position:relative;padding-left:40px;margin-bottom:16px;padding-bottom:16px;border-left:2px solid var(--color-border)}
+    .flow-steps li:last-child{border-left-color:transparent}
+    .flow-steps li::before{content:counter(step);position:absolute;left:-14px;top:0;width:26px;height:26px;border-radius:50%;background:var(--color-primary);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+    .mermaid{margin:20px 0;padding:20px;background:var(--color-bg-secondary);border-radius:var(--radius);border:1px solid var(--color-border-light);overflow-x:auto}
+    .mermaid-caption{text-align:center;font-size:13px;color:var(--color-text-muted);margin-top:-16px;margin-bottom:20px}
+    .page-nav{display:flex;justify-content:space-between;align-items:center;margin-top:56px;padding-top:24px;border-top:1px solid var(--color-border)}
+    .page-nav a{color:var(--color-primary);text-decoration:none;font-weight:500;font-size:14px}
+    .text-muted{color:var(--color-text-muted)}
+    @media(max-width:1024px){
+      .sidebar{transform:translateX(-100%);box-shadow:0 10px 15px -3px rgba(0,0,0,0.08)}
+      .sidebar.open{transform:translateX(0)}
+      .main{margin-left:0;padding:32px 24px;max-width:100%}
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>mermaid.initialize({startOnLoad:true,theme:'default'})</script>
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">开源库解构</div>
+  <div class="sidebar-title"><a href="index.html">Vitest</a></div>
+  <ul class="sidebar-nav">
+    <li><a href="#background">项目背景</a></li>
+    <li><a href="#quickstart">快速上手</a></li>
+    <li><a href="#engineering">工程化方案</a></li>
+    <li><a href="#artifacts">项目制品</a></li>
+    <li><a href="#structure">项目结构</a></li>
+    <li><a href="#core-chain">核心链路</a></li>
+    <li><a href="#architecture">架构总图</a></li>
+    <li><a href="#modules">模块导航</a></li>
+    <li><a href="#comparison">同类库对比</a></li>
+    <li><a href="#summary">学习要点</a></li>
+  </ul>
+</aside>
+
+<main class="main" id="main-content">
+
+  <!-- Header -->
+  <div class="page-header">
+    <h1>Vitest — 下一代测试框架</h1>
+    <p class="subtitle">由 Vite 驱动的极速单元测试框架。原生 ESM、智能 Watch 模式、Jest 兼容 API，重新定义前端测试开发体验。</p>
+    <div class="badges">
+      <span class="badge badge-primary">v5.0.0-beta.3</span>
+      <span class="badge badge-success">MIT License</span>
+      <span class="badge">TypeScript</span>
+      <span class="badge">pnpm Monorepo</span>
+      <span class="badge badge-accent">Vite-Powered</span>
+      <span class="badge">VoidZero</span>
+    </div>
+  </div>
+
+  <!-- Section 1: 项目背景 -->
+  <section id="background">
+    <h2>1. 项目背景</h2>
+    <p>Vitest 由 <strong>Anthony Fu</strong> 和 <strong>VoidZero</strong> 团队于 2021 年创建，目标是解决前端测试领域的一个长期痛点：<strong>测试框架与构建工具的割裂</strong>。Jest 虽然生态成熟，但其基于 <code>jest-runtime</code> 的模块系统需要额外配置才能理解 TypeScript、ESM、JSX 等现代语法——而这些恰好是 Vite 天然支持的。</p>
+    <p>Vitest 的核心洞察：<strong>复用 Vite 的转换管道（transform pipeline）、解析器（resolver）和插件系统</strong>，零配置即可获得与开发环境一致的测试运行环境。这不仅消除了配置负担，更重要的是确保了测试行为与应用运行行为完全一致。</p>
+    
+    <div class="arch-highlight">
+      <h4>🪄 设计哲学</h4>
+      <p style="margin:8px 0 0;color:var(--color-text-secondary)"><strong>一个配置，两处运行。</strong> 你的 <code>vite.config.ts</code> 既用于开发/构建，也直接驱动测试——不需要 <code>jest.config.js</code>、<code>babel.config.js</code> 等叠加配置。</p>
+    </div>
+
+    <p><strong>解决的问题</strong>：</p>
+    <ul>
+      <li>Jest 配置繁琐（TypeScript/ESM/CSS Modules 需要额外 transformer）</li>
+      <li>Jest 启动慢（vitest 的 watch 模式利用 Vite 的 HMR 机制实现毫秒级重跑）</li>
+      <li>测试环境与开发环境不一致（不同的模块解析、不同的转换规则）</li>
+      <li>缺乏原生 ESM 支持（vitest 原生支持 top-level await、import.meta）</li>
+    </ul>
+  </section>
+
+  <!-- Section 1.5: 快速上手 -->
+  <section id="quickstart">
+    <h2>2. 快速上手</h2>
+    <p>最小可运行示例——3 行代码开始测试：</p>
+    
+    <div class="code-ref">
+      <div class="code-ref__header">
+        <span class="code-ref__path">sum.test.ts</span>
+        <span class="code-ref__link">零配置，直接运行</span>
+      </div>
+<pre><code>import { expect, test } from 'vitest'
+import { sum } from './sum'
+
+test('adds 1 + 2 to equal 3', () => {
+  expect(sum(1, 2)).toBe(3)
+})</code></pre>
+    </div>
+
+    <p><strong>常见场景</strong>：</p>
+    <div class="code-ref">
+      <div class="code-ref__header"><span class="code-ref__path">带 Mock 的测试</span></div>
+<pre><code>import { vi, test, expect } from 'vitest'
+import { fetchUser } from './api'
+
+// Mock 一个模块
+vi.mock('./api', () => ({
+  fetchUser: vi.fn(() => Promise.resolve({ name: 'Alice' }))
+}))
+
+test('mock example', async () => {
+  const user = await fetchUser(1)
+  expect(user.name).toBe('Alice')
+  expect(fetchUser).toHaveBeenCalledWith(1)
+})</code></pre>
+    </div>
+
+    <div class="code-ref">
+      <div class="code-ref__header"><span class="code-ref__path">快照测试</span></div>
+<pre><code>import { expect, test } from 'vitest'
+
+test('snapshot', () => {
+  const data = { id: 1, items: ['a', 'b', 'c'] }
+  expect(data).toMatchSnapshot()
+})</code></pre>
+    </div>
+  </section>
+
+  <!-- Section 2: 工程化方案 -->
+  <section id="engineering">
+    <h2>3. 工程化方案</h2>
+    <table>
+      <tr><th>类别</th><th>工具</th><th>配置</th></tr>
+      <tr><td>包管理</td><td>pnpm (v11)</td><td><code>pnpm-workspace.yaml</code> — catalog 模式统一版本</td></tr>
+      <tr><td>构建</td><td>Rollup + tsup</td><td>每个子包独立 <code>rollup.config.js</code></td></tr>
+      <tr><td>TypeScript</td><td>tsc + unplugin-isolated-decl</td><td>项目级 <code>tsconfig.json</code> + 子包 <code>tsconfig.json</code></td></tr>
+      <tr><td>Lint</td><td>ESLint (flat config)</td><td><code>@antfu/eslint-config</code> + 根目录 <code>eslint.config.js</code></td></tr>
+      <tr><td>测试</td><td>Vitest 自身</td><td>自举测试——Vitest 用 Vitest 测试自己</td></tr>
+      <tr><td>CI/CD</td><td>GitHub Actions</td><td>多 Node 版本矩阵 + 浏览器测试 (Playwright)</td></tr>
+    </table>
+
+    <p><strong>值得学习的工程化实践</strong>：</p>
+    <ul>
+      <li><strong>Catalog 模式</strong>：<code>pnpm-workspace.yaml</code> 中用 <code>catalog</code> 字段统一管理所有依赖版本，避免版本漂移</li>
+      <li><strong>Patch 管理</strong>：对上游依赖的修改通过 <code>patches/</code> 目录 + pnpm 的 <code>patchedDependencies</code> 机制管理</li>
+      <li><strong>自举测试</strong>：<code>test/</code> 目录下的集成测试使用 vitest 本身运行，保证发布质量</li>
+      <li><strong>多构建产物</strong>：每个子包独立构建，通过 <code>exports</code> 字段细粒度控制导出</li>
+    </ul>
+  </section>
+
+  <!-- Section 3: 项目制品 -->
+  <section id="artifacts">
+    <h2>4. 项目制品</h2>
+    <table>
+      <tr><th>包名</th><th>npm</th><th>职责</th></tr>
+      <tr><td><code>vitest</code></td><td>主包</td><td>CLI、配置、Node API、Browser API</td></tr>
+      <tr><td><code>@vitest/runner</code></td><td>内部</td><td>测试执行引擎（suite/test/钩子）</td></tr>
+      <tr><td><code>@vitest/mocker</code></td><td>内部</td><td>模块模拟系统（vi.mock / vi.spyOn）</td></tr>
+      <tr><td><code>@vitest/expect</code></td><td>内部</td><td>断言库（Jest + Chai 兼容）</td></tr>
+      <tr><td><code>@vitest/spy</code></td><td>内部</td><td>Spy / Stub 实现</td></tr>
+      <tr><td><code>@vitest/snapshot</code></td><td>内部</td><td>快照管理</td></tr>
+      <tr><td><code>@vitest/utils</code></td><td>内部</td><td>工具函数、diff 算法、序列化</td></tr>
+      <tr><td><code>@vitest/ui</code></td><td>可选</td><td>Web UI 界面</td></tr>
+      <tr><td><code>@vitest/browser</code></td><td>可选</td><td>浏览器模式核心</td></tr>
+      <tr><td><code>@vitest/coverage-v8</code></td><td>可选</td><td>V8 原生覆盖率</td></tr>
+      <tr><td><code>@vitest/coverage-istanbul</code></td><td>可选</td><td>Istanbul 覆盖率</td></tr>
+      <tr><td><code>@vitest/browser-playwright</code></td><td>可选</td><td>Playwright 浏览器集成</td></tr>
+      <tr><td><code>@vitest/browser-webdriverio</code></td><td>可选</td><td>WebdriverIO 浏览器集成</td></tr>
+      <tr><td><code>@vitest/pretty-format</code></td><td>内部</td><td>格式化输出（类 jest 的 pretty-format）</td></tr>
+      <tr><td><code>@vitest/web-worker</code></td><td>内部</td><td>Web Worker 支持</td></tr>
+    </table>
+  </section>
+
+  <!-- Section 4: 项目结构 -->
+  <section id="structure">
+    <h2>5. 项目结构</h2>
+    <div class="dir-tree"><span class="comment"># Vitest Monorepo — 16 个子包</span>
+vitest/
+├── <span class="dir">packages/</span>           <span class="comment">核心源码（16 子包）</span>
+│   ├── <span class="dir">vitest/</span>          <span class="important">★ 主包：CLI / 配置 / Node API / Browser API</span>
+│   │   └── <span class="dir">src/</span>
+│   │       ├── <span class="dir">node/</span>        <span class="comment">CLI入口、配置解析、ViteDevServer管理、项目池</span>
+│   │       ├── <span class="dir">runtime/</span>     <span class="comment">worker 内执行逻辑、测试运行、环境配置</span>
+│   │       ├── <span class="dir">integrations/</span><span class="comment">spy/coverage/globals/vi 对象桥接</span>
+│   │       ├── <span class="dir">types/</span>        <span class="comment">全局类型定义</span>
+│   │       ├── <span class="dir">utils/</span>        <span class="comment">工具函数</span>
+│   │       └── <span class="dir">public/</span>       <span class="comment">公共导出入口</span>
+│   ├── <span class="dir">runner/</span>          <span class="important">★ 测试执行引擎：suite/test/hooks/并发控制</span>
+│   ├── <span class="dir">mocker/</span>          <span class="important">★ 模块模拟：vi.mock/vi.spyOn/自动mock</span>
+│   │   ├── <span class="dir">src/node/</span>      <span class="comment">Node 端：Vite 插件拦截模块加载</span>
+│   │   └── <span class="dir">src/browser/</span>   <span class="comment">浏览器端：MSW/Native 拦截</span>
+│   ├── <span class="dir">expect/</span>          <span class="comment">断言库：Jest expect + Chai 双API兼容</span>
+│   ├── <span class="dir">snapshot/</span>        <span class="comment">快照系统：存储、比对、更新、内联快照</span>
+│   ├── <span class="dir">spy/</span>            <span class="comment">Spy 实现：函数调用追踪</span>
+│   ├── <span class="dir">utils/</span>           <span class="comment">通用工具：diff算法、序列化、Nanoid</span>
+│   ├── <span class="dir">ui/</span>             <span class="comment">Web UI：可视化测试报告</span>
+│   ├── <span class="dir">browser/</span>        <span class="comment">浏览器模式核心：WebSocket通信、iframe管理</span>
+│   └── <span class="dir">...</span>
+├── <span class="dir">test/</span>              <span class="comment">集成测试（大量端到端用例）</span>
+├── <span class="dir">docs/</span>             <span class="comment">文档站点（VitePress）</span>
+└── <span class="dir">examples/</span>          <span class="comment">示例项目</span>
+</div>
+  </section>
+
+  <!-- Section 5: 核心链路 -->
+  <section id="core-chain">
+    <h2>6. 核心链路概览</h2>
+
+    <h3>6.1 一次完整测试运行的生命周期</h3>
+    
+    <ol class="flow-steps">
+      <li><strong>CLI 启动</strong><br><code>packages/vitest/src/node/cli.ts</code> → 使用 <code>cac</code> 解析命令行参数 → 创建 <code>Vitest</code> 实例</li>
+      <li><strong>配置解析</strong><br><code>packages/vitest/src/node/core.ts:252</code> → <code>resolveConfig()</code> 合并 CLI 选项 + vite.config.ts + vitest 默认值</li>
+      <li><strong>Vite Server 创建</strong><br>复用或创建 ViteDevServer → 注册 vitest 插件 → 配置模块解析</li>
+      <li><strong>项目发现</strong><br><code>resolveProjects()</code> → 扫描 workspace 中的 test projects → 创建 <code>TestProject</code> 实例</li>
+      <li><strong>文件收集</strong><br><code>VitestSpecifications</code> → 根据 <code>include/exclude</code> 模式找到测试文件 → AST 分析提取测试元数据</li>
+      <li><strong>Worker 池分配</strong><br><code>ProcessPool</code> → 根据 <code>pool</code> 配置（threads/forks/vmThreads）创建 worker 进程</li>
+      <li><strong>模块加载与转换</strong><br>Worker 内通过 Vite 的 <code>SSR 模块图</code> 加载测试文件 → Vite 插件管道转换 TS/JSX/CSS</li>
+      <li><strong>测试执行</strong><br><code>@vitest/runner</code> → <code>startTests()</code> → 按序执行 suite → beforeEach → test → afterEach</li>
+      <li><strong>结果报告</strong><br>Reporter 管道 → 终端输出 / JSON / JUnit / HTML 报告</li>
+    </ol>
+
+    <h3>6.2 核心数据流</h3>
+    <pre class="mermaid">
+graph LR
+    A[CLI 参数] --> B[Vitest 实例]
+    B --> C[ViteDevServer]
+    B --> D[resolveConfig]
+    D --> E[TestProject x N]
+    E --> F[Worker Pool]
+    F --> G[Worker 进程]
+    G --> H[模块加载 via Vite SSR]
+    H --> I[@vitest/runner]
+    I --> J[Test Results]
+    J --> K[Reporter]
+    K --> L[终端/JSON/JUnit/HTML]
+    M[Mocker Plugin] -.-> H
+    N[Coverage Provider] -.-> I
+</pre>
+    <p class="mermaid-caption">图：Vitest 核心数据流 —— 从 CLI 到测试报告的完整链路</p>
+
+    <h3>6.3 推荐阅读路径</h3>
+    <ol class="reading-path">
+      <li><span class="step-num">1</span><span class="step-file">packages/vitest/src/node/cli.ts</span><span class="step-desc">CLI 入口，创建 Vitest 实例</span></li>
+      <li><span class="step-num">2</span><span class="step-file">packages/vitest/src/node/core.ts</span><span class="step-desc">Vitest 核心类：生命周期管理、配置、项目池</span></li>
+      <li><span class="step-num">3</span><span class="step-file">packages/vitest/src/node/pool.ts</span><span class="step-desc">Worker 线程/进程池管理</span></li>
+      <li><span class="step-num">4</span><span class="step-file">packages/vitest/src/runtime/runBaseTests.ts</span><span class="step-desc">Worker 内测试执行入口</span></li>
+      <li><span class="step-num">5</span><span class="step-file">packages/runner/src/run.ts</span><span class="step-desc">Runner 核心：startTests / 钩子 / 并发控制</span></li>
+      <li><span class="step-num">6</span><span class="step-file">packages/runner/src/suite.ts</span><span class="step-desc">suite/test API 定义与 task 构建</span></li>
+      <li><span class="step-num">7</span><span class="step-file">packages/mocker/src/node/</span><span class="step-desc">Mocker：Vite 插件拦截 + 自动 mock</span></li>
+    </ol>
+
+    <h3>6.4 关键代码速览</h3>
+    <div class="code-ref">
+      <div class="code-ref__header">
+        <span class="code-ref__path">packages/vitest/src/node/core.ts:69-185</span>
+        <a class="code-ref__link" href="vscode://file/Users/chenzedong/Desktop/zedong/vitest/packages/vitest/src/node/core.ts:69:0">IDE 打开</a>
+      </div>
+<pre><code><span class="cm">// ★ Vitest 核心类：整个测试运行器的中枢</span>
+<span class="kw">export class</span> <span class="type">Vitest</span> {
+  <span class="kw">public readonly</span> version = version
+  <span class="kw">public readonly</span> <span class="fn">logger</span>: Logger
+  <span class="kw">public readonly</span> <span class="fn">packageInstaller</span>: VitestPackageInstaller
+  <span class="kw">public readonly</span> <span class="fn">watcher</span>: VitestWatcher
+  <span class="kw">public</span> projects: TestProject[] = []
+  <span class="kw">public</span> vcs: VCSProvider
+
+  <span class="cm">// ★ 构造时仅做最基础的初始化</span>
+  <span class="kw">constructor</span>(modeOrCliOptions, cliOptionsOrOptions?, maybeOptions?) {
+    <span class="kw">this</span>._cliOptions = cliOptions
+    <span class="kw">this</span>.<span class="fn">logger</span> = <span class="kw">new</span> <span class="type">Logger</span>(<span class="kw">this</span>, options.stdout, options.stderr)
+    <span class="kw">this</span>.<span class="fn">packageInstaller</span> = options.packageInstaller || <span class="kw">new</span> <span class="type">VitestPackageInstaller</span>()
+    <span class="kw">this</span>.<span class="fn">specifications</span> = <span class="kw">new</span> <span class="type">VitestSpecifications</span>(<span class="kw">this</span>)
+    <span class="kw">this</span>.<span class="fn">watcher</span> = <span class="kw">new</span> <span class="type">VitestWatcher</span>(<span class="kw">this</span>)
+  }
+}</code></pre>
+    </div>
+
+    <div class="code-ref">
+      <div class="code-ref__header">
+        <span class="code-ref__path">packages/runner/src/run.ts:36-38</span>
+        <a class="code-ref__link" href="vscode://file/Users/chenzedong/Desktop/zedong/vitest/packages/runner/src/run.ts:36:0">IDE 打开</a>
+      </div>
+<pre><code><span class="cm">// ★ Runner 使用高性能计时器</span>
+<span class="kw">const</span> now = globalThis.performance
+  ? globalThis.performance.now.bind(globalThis.performance)
+  : Date.now
+<span class="kw">const</span> unixNow = Date.now
+<span class="kw">const</span> { clearTimeout, setTimeout } = <span class="fn">getSafeTimers</span>()</code></pre>
+    </div>
+  </section>
+
+  <!-- Section 6: 架构总图 -->
+  <section id="architecture">
+    <h2>7. 架构总图</h2>
+    <pre class="mermaid">
+graph TB
+    subgraph "Main Process (Node.js)"
+        CLI["cac CLI<br/>cli.ts"]
+        V["Vitest 实例<br/>core.ts (1707行)"]
+        CFG["resolveConfig<br/>合并 vite 配置"]
+        VS["ViteDevServer<br/>复用 Vite 插件体系"]
+        TP["TestProject × N<br/>project.ts"]
+        SPEC["VitestSpecifications<br/>文件发现 + AST"]
+        POOL["ProcessPool<br/>Worker 管理"]
+        REP["Reporter 管道<br/>终端/JUnit/JSON/Blob"]
+    end
+
+    subgraph "Worker Process"
+        WE["Worker 入口<br/>runBaseTests.ts"]
+        VL["Vite SSR 模块加载<br/>转换 TS/JSX/CSS"]
+        RUN["@vitest/runner<br/>run.ts / suite.ts"]
+        MK["@vitest/mocker<br/>vi.mock 拦截"]
+        EXP["@vitest/expect<br/>断言匹配"]
+        SN["@vitest/snapshot<br/>快照比对"]
+    end
+
+    subgraph "Browser"
+        BM["Browser Mode<br/>Playwright / WebDriverIO"]
+    end
+
+    CLI --> V
+    V --> CFG
+    CFG --> VS
+    VS --> TP
+    TP --> SPEC
+    SPEC --> POOL
+    POOL --> WE
+    WE --> VL
+    VL --> RUN
+    MK -.-> VL
+    RUN --> EXP
+    RUN --> SN
+    RUN --> REP
+    BM -.-> WE
+
+    style V fill:#7c3aed,color:#fff
+    style RUN fill:#2563eb,color:#fff
+    style MK fill:#059669,color:#fff
+</pre>
+    <p class="mermaid-caption">图：Vitest 架构总图 —— 主进程、Worker 进程、浏览器模式三层协作</p>
+  </section>
+
+  <!-- Section 8: 模块导航 -->
+  <section id="modules">
+    <h2>8. 模块深度导航</h2>
+    <div class="module-grid">
+      <a class="module-card" href="module-runner.html">
+        <h4>🏃 Runner 执行引擎</h4>
+        <p>suite/test 定义、钩子系统、并发控制、重试机制、Around Hooks</p>
+        <span class="tag">核心</span>
+      </a>
+      <a class="module-card" href="module-mocker.html">
+        <h4>🎭 Mocker 模块模拟</h4>
+        <p>vi.mock/vi.spyOn、Vite 插件拦截、自动 mock、浏览器端 MSW 集成</p>
+        <span class="tag">核心</span>
+      </a>
+      <a class="module-card" href="module-expect.html">
+        <h4>✅ Expect 断言系统</h4>
+        <p>Jest expect + Chai 双 API、非对称匹配器、自定义匹配器扩展</p>
+        <span class="tag">核心</span>
+      </a>
+      <a class="module-card" href="module-core.html">
+        <h4>⚙️ Vitest 核心架构</h4>
+        <p>CLI 入口、配置解析、Worker 池、Vite 集成、Reporter 管道</p>
+        <span class="tag">主包</span>
+      </a>
+      <a class="module-card" href="module-snapshot.html">
+        <h4>📸 Snapshot 快照系统</h4>
+        <p>快照存储/比对/更新、内联快照、序列化器、环境适配</p>
+        <span class="tag">特性</span>
+      </a>
+      <a class="module-card" href="module-browser.html">
+        <h4>🌐 Browser 浏览器模式</h4>
+        <p>Playwright/WebDriverIO 集成、iframe 沙箱、组件测试</p>
+        <span class="tag">特性</span>
+      </a>
+    </div>
+  </section>
+
+  <!-- Section 9: 同类库对比 -->
+  <section id="comparison">
+    <h2>9. 同类库对比</h2>
+    <table>
+      <tr><th>维度</th><th>Vitest</th><th>Jest</th><th>Mocha</th></tr>
+      <tr><td>配置复杂度</td><td>零配置（复用 Vite）</td><td>需 babel/ts-jest</td><td>需手动组装</td></tr>
+      <tr><td>ESM 支持</td><td>原生 ESM first</td><td>实验性支持</td><td>需额外配置</td></tr>
+      <tr><td>Watch 模式</td><td>HMR 级别（毫秒）</td><td>基于文件变更</td><td>需插件</td></tr>
+      <tr><td>覆盖率</td><td>V8 原生 + Istanbul</td><td>Istanbul</td><td>需 nyc/c8</td></tr>
+      <tr><td>浏览器测试</td><td>✅ 原生支持</td><td>❌ jsdom 模拟</td><td>❌ 需 Karma</td></tr>
+      <tr><td>TypeScript</td><td>开箱即用</td><td>需额外配置</td><td>需 ts-node</td></tr>
+      <tr><td>Monorepo</td><td>Workspace 原生</td><td>projects 配置</td><td>需手动组织</td></tr>
+      <tr><td>兼容性</td><td>Jest API 兼容</td><td>—</td><td>风格差异大</td></tr>
+    </table>
+
+    <div class="callout callout-insight">
+      <div class="callout-title">🧠 设计取舍</div>
+      <p><strong>为什么基于 Vite 而不是自己实现模块加载？</strong></p>
+      <p>复用 Vite 的转换管道意味着 Vitest 天然支持 Vite 生态中的所有插件和配置。这不是一个"偷懒"的决定，而是一个架构级的判断：测试框架不需要也不应该重新发明模块加载。这不仅减少了维护负担，更重要的是保证了测试环境与打包环境的行为一致性。</p>
+    </div>
+  </section>
+
+  <!-- Section 10: 学习要点总结 -->
+  <section id="summary">
+    <h2>10. 学习要点总结</h2>
+
+    <table>
+      <tr><th>🏗️ 架构能力</th><th>学习价值</th></tr>
+      <tr><td>Vite 插件体系复用</td><td>理解"组合优于继承"在构建工具中的实践</td></tr>
+      <tr><td>Monorepo 架构</td><td>16 个包的职责划分、依赖管理、Catalog 模式</td></tr>
+      <tr><td>Worker 进程池</td><td>多线程测试执行的隔离与通信 (birpc)</td></tr>
+      <tr><td>插件化 Mocker</td><td>Vite 插件拦截 + 运行时反射的动态 mock 机制</td></tr>
+      <tr><td>双 API 兼容</td><td>Jest expect + Chai 双接口的设计模式</td></tr>
+      <tr><td>浏览器模式</td><td>iframe 沙箱 + CDP 协议 + WebSocket 通信</td></tr>
+    </table>
+
+    <div class="arch-highlight">
+      <h4>💡 一句话总结</h4>
+      <p style="margin:8px 0 0;color:var(--color-text-secondary)">Vitest 不是"更好的 Jest"——它是利用 Vite 生态系统重新思考测试框架的产物。它的最大创新不是某个具体功能，而是证明了 <strong>构建工具和测试框架可以共享同一条管道</strong>，从而消除了前端开发中"配置地狱"的最后一公里。</p>
+    </div>
+
+    <div class="page-nav">
+      <span class="text-muted">← 总览页</span>
+      <a href="module-runner.html">Runner 执行引擎 →</a>
+    </div>
+  </section>
+
+</main>
+</div>
+<script>
+(function(){
+  if(window.innerWidth>1024)return;
+  var s=document.getElementById('sidebar'),b=document.createElement('div');
+  b.className='sidebar-backdrop';b.onclick=function(){s.classList.remove('open');b.classList.remove('open')};document.body.appendChild(b);
+  var btn=document.createElement('button');btn.textContent='☰ 目录';
+  btn.style.cssText='position:fixed;bottom:20px;right:20px;z-index:200;padding:10px 16px;border-radius:24px;border:none;background:var(--color-primary);color:#fff;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.2)';
+  btn.onclick=function(){s.classList.toggle('open');b.classList.toggle('open')};document.body.appendChild(btn);
+})();
+</script>
+</body>
+</html>

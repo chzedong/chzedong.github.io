@@ -1,0 +1,186 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Runner 执行引擎 · Vitest 深度解构</title><link rel="stylesheet" href="style.css"></head><body><div class="layout"><aside class="sidebar" id="sidebar"><div class="sidebar-header">Vitest 解构</div><div class="sidebar-title"><a href="index.html">← Vitest</a></div><ul class="sidebar-nav"><li><a href="#overview">模块概览</a></li><li><a href="#architecture">执行架构</a></li><li><a href="#suite-test">Suite &amp; Test 定义</a></li><li><a href="#hooks">钩子系统</a></li><li><a href="#around-hooks">Around Hooks</a></li><li><a href="#concurrency">并发控制</a></li><li><a href="#retry">重试机制</a></li><li><a href="#collect">文件收集</a></li><li><a href="#contrast">如果我来写</a></li><li><a href="#summary">学习要点</a></li></ul></aside><main class="main" id="main-content"><div class="page-header"><h1>🏃 Runner 执行引擎</h1><p class="subtitle"><code>@vitest/runner</code> — 测试执行的"心脏"。定义 suite/test API、管理钩子生命周期、控制并发与重试。</p><div class="badges"><span class="badge badge-primary">核心模块</span><span class="badge">22 源文件</span><span class="badge badge-accent">~1100 行 run.ts</span></div></div>
+
+<section id="overview"><h2>1. 模块定位</h2><p>Runner 是 Vitest 中<strong>唯一不依赖 Vite</strong> 的核心模块——这意味着它可以在任何 JS 运行时中使用。它承担三个核心职责：</p><ol><li><strong>测试 API 定义</strong>：<code>suite</code>/<code>test</code>/<code>describe</code>/<code>it</code> 等用户可见的接口</li><li><strong>执行编排</strong>：按正确的顺序运行钩子和测试，管理并发和超时</li><li><strong>任务模型</strong>：定义 <code>Suite</code> / <code>Test</code> / <code>File</code> 等任务类型及其状态机</li></ol>
+
+<div class="arch-highlight"><h4>🎯 独立设计</h4><p style="margin:8px 0 0;color:var(--color-text-secondary)">Runner 与 Vite 完全解耦。它只接收一个 <code>VitestRunner</code> 接口（定义了 <code>import</code> 模块的能力），<strong>不关心模块从哪里来</strong>——可以是 Vite SSR、Node <code>import()</code>、甚至是浏览器的 <code>&lt;script&gt;</code> 标签。</p></div></section>
+
+<section id="architecture"><h2>2. 执行架构</h2>
+<pre class="mermaid">sequenceDiagram
+    participant O as 调度器<br/>(core.ts)
+    participant W as Worker
+    participant R as Runner<br/>(run.ts)
+    participant S as Suite<br/>(suite.ts)
+
+    O-&gt;&gt;W: 分配测试文件
+    W-&gt;&gt;R: startTests(specs)
+    R-&gt;&gt;S: runSetupFiles()
+    Note over R: for each file
+    R-&gt;&gt;S: collectSuite(file)
+    S--&gt;&gt;R: Suite tree
+    R-&gt;&gt;R: beforeAll hooks
+    loop for each test
+        R-&gt;&gt;R: aroundAll hooks
+        R-&gt;&gt;R: beforeEach hooks
+        R-&gt;&gt;S: execute test fn
+        R-&gt;&gt;R: afterEach hooks
+    end
+    R-&gt;&gt;R: afterAll hooks
+    R--&gt;&gt;W: test results
+</pre><p class="mermaid-caption">图：Runner 执行时序 —— 从调度到测试结果的完整流程</p></section>
+
+<section id="suite-test"><h2>3. Suite &amp; Test 定义</h2>
+<p>Runner 使用一个<strong>惰性收集</strong>模型：当调用 <code>suite(name, fn)</code> 时，不会立即创建 Suite 对象，而是创建一个 <code>SuiteCollector</code>——它持有工厂函数，在文件被实际执行时才展开。</p>
+
+<div class="code-ref"><div class="code-ref__header"><span class="code-ref__path">packages/runner/src/suite.ts:305-317</span><a class="code-ref__link" href="vscode://file/Users/chenzedong/Desktop/zedong/vitest/packages/runner/src/suite.ts:305:0">IDE 打开</a></div><pre><code><span class="cm">// ★ SuiteCollector: 惰性收集器 —— 延迟执行 suite 工厂函数</span>
+<span class="kw">function</span> <span class="fn">createSuiteCollector</span>(
+  name: <span class="type">string</span>,
+  factory: SuiteFactory = () =&gt; {},
+  mode: RunMode,
+  each?: <span class="type">boolean</span>,
+  suiteOptions?: SuiteOptions,
+) {
+  <span class="kw">const</span> tasks: (Test | Suite | SuiteCollector)[] = []
+  <span class="kw">let</span> suite!: Suite
+  <span class="fn">initSuite</span>(<span class="num">true</span>)
+  <span class="cm">// ... 工厂在文件实际运行时才调用</span>
+}</code></pre></div>
+
+<p>Test 函数内部会创建一个完整的 Task 对象，包含：</p><ul><li><code>id</code> — 运行时自动分配</li><li><code>fullName</code> — 整个 suite 层级拼接的名称</li><li><code>mode</code> — run / skip / only / todo</li><li><code>timeout</code> — 超时时间（从配置/标签继承）</li><li><code>retry</code> — 重试配置</li><li><code>concurrent</code> — 是否并发执行</li><li><code>tags</code> — 标签（用于过滤）</li><li><code>meta</code> — 自定义元数据（可被子任务继承）</li></ul>
+
+<div class="code-ref"><div class="code-ref__header"><span class="code-ref__path">packages/runner/src/suite.ts:342-403</span><a class="code-ref__link" href="vscode://file/Users/chenzedong/Desktop/zedong/vitest/packages/runner/src/suite.ts:342:0">IDE 打开</a></div><pre><code><span class="cm">// ★ 标签优先级排序 + 元数据继承</span>
+<span class="kw">const</span> tagsOptions = testTags
+  .map((tag) =&gt; { <span class="cm">/* 查找 tag 定义 */</span> })
+  .sort((tag1, tag2) =&gt;
+    (tag2.priority ?? POSITIVE_INFINITY) - (tag1.priority ?? POSITIVE_INFINITY))
+  <span class="cm">// 高优先级的标签排前面 → 低优先级的配置先被覆盖</span>
+  .reduce((acc, tag) =&gt; {
+    <span class="kw">const</span> { name, description, priority, meta, ...options } = tag
+    Object.assign(acc, options)
+    <span class="kw">return</span> acc
+  }, {} <span class="kw">as</span> TestOptions)
+
+<span class="cm">// ★ 元数据继承链: Tag Meta → Suite Meta → Test Meta</span>
+<span class="kw">const</span> testMeta = Object.create(<span class="kw">null</span>)
+<span class="kw">if</span> (tagMeta) Object.assign(testMeta, tagMeta)
+<span class="kw">if</span> (parentMeta) Object.assign(testMeta, parentMeta)
+<span class="kw">if</span> (testOwnMeta) Object.assign(testMeta, testOwnMeta)</code></pre></div>
+
+<div class="callout callout-insight"><div class="callout-title">🧠 标签配置继承的设计意图</div><p><strong>为什么标签要按优先级排序？</strong>Vitest 支持为标签关联配置（如超时时间、并发等）。多个标签可能冲突——通过 优先级（priority）机制，<strong>高优先级标签的配置覆盖低优先级的</strong>，与 CSS 层叠类似。这是一种优雅的冲突解决策略。</p></div></section>
+
+<section id="hooks"><h2>4. 钩子系统</h2>
+<p>Runner 支持 6 种钩子，分三个层次：</p>
+<table><tr><th>钩子</th><th>作用域</th><th>执行时机</th><th>支持</th></tr><tr><td><code>beforeAll</code></td><td>Suite</td><td>Suite 开始时</td><td>parallel/stack</td></tr><tr><td><code>afterAll</code></td><td>Suite</td><td>Suite 结束时</td><td>stack（反转）</td></tr><tr><td><code>beforeEach</code></td><td>Suite</td><td>每个 test 前</td><td>parallel/stack + 父级继承</td></tr><tr><td><code>afterEach</code></td><td>Suite</td><td>每个 test 后</td><td>stack（反转）+ 父级继承</td></tr><tr><td><code>aroundAll</code></td><td>Suite</td><td>包裹整个 suite</td><td>洋葱模型</td></tr><tr><td><code>aroundEach</code></td><td>Suite</td><td>包裹每个 test</td><td>洋葱模型 + 父级继承</td></tr></table>
+
+<p><strong>钩子的父级继承</strong>：<code>beforeEach</code>/<code>afterEach</code>/<code>aroundEach</code> 会从父 Suite 递归继承——子 Suite 的测试会先运行父 Suite 的同名钩子。</p>
+
+<div class="code-ref"><div class="code-ref__header"><span class="code-ref__path">packages/runner/src/run.ts:167-224</span><a class="code-ref__link" href="vscode://file/Users/chenzedong/Desktop/zedong/vitest/packages/runner/src/run.ts:167:0">IDE 打开</a></div><pre><code><span class="cm">// ★ 钩子继承实现：递归向上调用父 Suite 的钩子</span>
+<span class="kw">export async function</span> <span class="fn">callSuiteHook</span>(suite, currentTask, name, runner, args) {
+  <span class="kw">const</span> callbacks: unknown[] = []
+  <span class="kw">const</span> parentSuite = <span class="str">'filepath'</span> <span class="kw">in</span> suite ? <span class="kw">null</span> : suite.suite || suite.file
+
+  <span class="cm">// ★ beforeEach 递归到父 Suite</span>
+  <span class="kw">if</span> (name === <span class="str">'beforeEach'</span> &amp;&amp; parentSuite) {
+    callbacks.push(
+      ...(<span class="kw">await</span> <span class="fn">callSuiteHook</span>(parentSuite, currentTask, name, runner, args)),
+    )
+  }
+
+  <span class="kw">const</span> hooks = <span class="fn">getSuiteHooks</span>(suite, name, sequence)
+  <span class="kw">if</span> (sequence === <span class="str">'parallel'</span>) {
+    callbacks.push(...(<span class="kw">await</span> Promise.all(hooks.map(hook =&gt; <span class="fn">runHook</span>(hook)))))
+  } <span class="kw">else</span> {
+    <span class="kw">for</span> (<span class="kw">const</span> hook <span class="kw">of</span> hooks) callbacks.push(<span class="kw">await</span> <span class="fn">runHook</span>(hook))
+  }
+
+  <span class="cm">// ★ afterEach 也在当前 Suite 之后调用父级</span>
+  <span class="kw">if</span> (name === <span class="str">'afterEach'</span> &amp;&amp; parentSuite) {
+    callbacks.push(...(<span class="kw">await</span> <span class="fn">callSuiteHook</span>(parentSuite, currentTask, name, runner, args)))
+  }
+  <span class="kw">return</span> callbacks
+}</code></pre></div></section>
+
+<section id="around-hooks"><h2>5. Around Hooks — 洋葱模型</h2>
+<p><code>aroundEach</code> 和 <code>aroundAll</code> 是 Vitest 独有的高级钩子，实现了一个<strong>洋葱模型</strong>：</p>
+
+<pre class="mermaid">graph LR
+    A[aroundEach setup] --&gt; B[beforeEach] --&gt; C[test fn] --&gt; D[afterEach] --&gt; E[aroundEach teardown]
+</pre><p class="mermaid-caption">图：aroundEach 包裹结构 —— setup 在 beforeEach 之前，teardown 在 afterEach 之后</p>
+
+<p>每个 around hook 接收一个 <code>use()</code> 回调——调用它才会执行内层逻辑：</p>
+<ul><li><strong>setup 阶段</strong>：hook 被调用 → 执行用户代码（setup 逻辑）→ 调用 <code>use()</code></li><li><strong>teardown 阶段</strong>：<code>use()</code> 返回后 → 执行 <code>use()</code> 之后的代码</li></ul>
+
+<div class="code-ref"><div class="code-ref__header"><span class="code-ref__path">packages/runner/src/run.ts:263-399</span><a class="code-ref__link" href="vscode://file/Users/chenzedong/Desktop/zedong/vitest/packages/runner/src/run.ts:263:0">IDE 打开</a></div><pre><code><span class="cm">// ★ callAroundHooks: 实现洋葱模型的 setup/teardown 分离</span>
+<span class="kw">const</span> use = <span class="kw">async</span> () =&gt; {
+  <span class="cm">// ⚠️ setup 超时检查：防止 hook 长时间不调 use()</span>
+  <span class="kw">if</span> (setupTimeout.isTimedOut()) <span class="kw">throw new</span> Error(<span class="str">'__VITEST_INTERNAL_…'</span>)
+  <span class="kw">if</span> (useCalled) <span class="kw">throw new</span> AroundHookMultipleCallsError(<span class="str">'use() called twice'</span>)
+  useCalled = <span class="kw">true</span>
+  setupTimeout.clear()  <span class="cm">// ★ setup 完成 → 清除 setup 计时器</span>
+
+  <span class="kw">await</span> <span class="fn">runNextHook</span>(index + <span class="num">1</span>)  <span class="cm">// ★ 执行内层逻辑（递归）</span>
+
+  <span class="cm">// ★ 启动 teardown 计时器</span>
+  teardownTimeout = <span class="fn">createTimeoutPromise</span>(timeout, <span class="str">'teardown'</span>, stackTraceError)
+}</code></pre></div>
+
+<div class="callout callout-tip"><div class="callout-title">💡 实际应用</div><p><code>aroundEach</code> 的典型用法：在 setup 中创建数据库事务，测试在事务中运行，teardown 时回滚——<strong>保证测试之间完全隔离</strong>。这比 <code>beforeEach</code> + <code>afterEach</code> 更语义化，也更容易处理异步清理。</p></div></section>
+
+<section id="concurrency"><h2>6. 并发控制</h2>
+<p>Runner 使用 <code>limitConcurrency</code> 进行并发限制：</p>
+<ul><li><code>maxConcurrency</code>：全局最大并发数（默认 5）</li><li><code>sequence.concurrent</code>：是否允许 test 并发执行</li><li><code>sequence.hooks</code>：钩子执行策略（<code>parallel</code> / <code>stack</code>）</li></ul>
+
+<div class="code-ref"><div class="code-ref__header"><span class="code-ref__path">packages/runner/src/utils/limit-concurrency.ts</span></div><pre><code><span class="cm">// ★ 一个信号量模式的并发限制器</span>
+<span class="kw">export function</span> <span class="fn">limitConcurrency</span>(maxConcurrency = <span class="num">5</span>): ConcurrencyLimiter {
+  <span class="kw">let</span> running = <span class="num">0</span>
+  <span class="kw">const</span> queue: (() =&gt; <span class="kw">void</span>)[] = []
+
+  <span class="kw">return</span> {
+    run: <span class="kw">async</span> &lt;T&gt;(fn: () =&gt; Promise&lt;T&gt;): Promise&lt;T&gt; =&gt; {
+      <span class="kw">await</span> <span class="kw">this</span>.acquire()
+      <span class="kw">try</span> { <span class="kw">return await</span> <span class="fn">fn</span>() }
+      <span class="kw">finally</span> { <span class="kw">this</span>.release() }
+    },
+    acquire: <span class="kw">async</span> () =&gt; {
+      <span class="kw">if</span> (running &lt; maxConcurrency) { running++; <span class="kw">return</span> }
+      <span class="kw">return new</span> Promise(resolve =&gt; queue.push(resolve))
+    },
+    release: () =&gt; { running--; queue.shift()?.() },
+  }
+}</code></pre></div></section>
+
+<section id="retry"><h2>7. 重试机制</h2>
+<p>Vitest 的重试有三个维度：<code>retry.count</code>（重试次数）、<code>retry.delay</code>（延迟毫秒）、<code>retry.condition</code>（条件匹配）。一个测试失败时，Runner 会按 condition 判断是否重试：</p>
+
+<div class="code-ref"><div class="code-ref__header"><span class="code-ref__path">packages/runner/src/run.ts:45-75</span></div><pre><code><span class="kw">function</span> <span class="fn">getRetryCount</span>(retry): <span class="type">number</span> { <span class="cm">/* 支持 number 和 { count } 两种配置 */</span> }
+<span class="kw">function</span> <span class="fn">getRetryDelay</span>(retry): <span class="type">number</span> { <span class="cm">/* 支持 { delay } 配置 */</span> }
+<span class="kw">function</span> <span class="fn">getRetryCondition</span>(retry): <span class="type">RegExp | ((error) =&gt; boolean)</span> {
+  <span class="cm">// ★ 支持正则匹配错误消息 或 自定义条件函数</span>
+}</code></pre></div></section>
+
+<section id="collect"><h2>8. 文件收集（collectTests）</h2>
+<p>在执行测试之前，Runner 需要收集 Suite 结构。每个文件通过 <code>createFileTask</code> 创建一个 File task，然后执行文件中的 <code>suite()</code> / <code>test()</code> 调用，构建一棵 Suite/Test 树——这个阶段<strong>不执行实际的测试函数</strong>，只为后续的 <code>startTests</code> 提供结构信息。</p>
+
+<div class="code-ref"><div class="code-ref__header"><span class="code-ref__path">packages/runner/src/collect.ts:23-65</span><a class="code-ref__link" href="vscode://file/Users/chenzedong/Desktop/zedong/vitest/packages/runner/src/collect.ts:23:0">IDE 打开</a></div><pre><code><span class="kw">export async function</span> <span class="fn">collectTests</span>(specs, runner): Promise&lt;File[]&gt; {
+  <span class="kw">const</span> files: File[] = []
+  <span class="kw">for</span> (<span class="kw">const</span> spec <span class="kw">of</span> specs) {
+    <span class="kw">const</span> file = <span class="fn">createFileTask</span>(filepath, config.root, config.name, runner.pool, ...)
+    file.shuffle = config.sequence.shuffle
+    <span class="cm">// ★ 运行文件 → 收集 suite/test 调用 → 构建任务树</span>
+    files.push(file)
+  }
+  <span class="kw">return</span> files
+}</code></pre></div></section>
+
+<section id="contrast"><h2>9. "如果我来写" 对比思考</h2>
+
+<div class="callout callout-insight"><div class="callout-title">🧠 问题：如何处理测试超时？</div><p><strong>直觉方案</strong>：<code>Promise.race(testFn, timeout)</code>——简单、直接。</p><p><strong>Vitest 的做法</strong>：使用 <code>setTimeout</code> + <code>performance.now()</code> 双重检查（见 <code>context.ts:40-80</code>）。在 Promise resolve 时复检 elapsed time——因为 <code>setTimeout</code> 可能因事件循环繁忙而延迟触发，而微任务可能在超时后仍然执行。</p><p><strong>差异分析</strong>：<code>Promise.race</code> 只会在 setTimeout 触发时 reject，但如果测试在微任务中耗时过长（比如一个巨大的同步循环），<code>Promise.race</code> 会等到 setTimeout 触发才 reject，而 Vitest 在 Promise resolve 时主动检查时间。这源于 GitHub Issue #2920 的真实 Bug：测试函数同步耗时超过 timeout，但 setTimeout 未触发。</p></div>
+
+<div class="callout callout-insight"><div class="callout-title">🧠 问题：钩子执行顺序如何管理？</div><p><strong>直觉方案</strong>：硬编码执行顺序——beforeAll → beforeEach → test → afterEach → afterAll。</p><p><strong>Vitest 的做法</strong>：<code>sequence.hooks</code> 配置 + <code>beforeEach</code> 向上递归继承。支持 <code>parallel</code>（并发执行同级钩子）和 <code>stack</code>（顺序执行，<code>afterAll</code> 反转）。</p><p><strong>差异分析</strong>：硬编码无法满足"父 Suite 的 beforeEach 也要在子 Suite 的 test 前执行"这种场景。递归继承 + 运行时配置让钩子系统变得<strong>可组合</strong>——每个 Suite 只声明自己的钩子，执行时由框架递归组装。</p></div>
+
+<div class="callout callout-insight"><div class="callout-title">🧠 问题：如何保证并发安全？</div><p><strong>直觉方案</strong>：使用 <code>Promise.all</code> 并行执行所有测试。</p><p><strong>Vitest 的做法</strong>：<code>limitConcurrency</code> 信号量 + <code>suite.concurrent</code> 逐测试控制。每个 Task 有独立的 <code>concurrent</code> 标志，未标记的测试即使全局开启了并发也会顺序执行。</p><p><strong>差异分析</strong>：全量 <code>Promise.all</code> 会导致数据库连接池耗尽、文件描述符不够等资源问题。逐测试控制 + 全局限流 = <strong>精细化的并发策略</strong>，让用户可以对包含副作用的测试关闭并发。</p></div>
+</section>
+
+<section id="summary"><h2>10. 学习要点</h2>
+<table><tr><th>🏗️ 学习主题</th><th>关键收获</th></tr><tr><td>惰性收集模型</td><td>SuiteCollector 延迟执行工厂函数——分离"定义"与"执行"</td></tr><tr><td>递归钩子继承</td><td>beforeEach 向上递归，实现父 Suite 钩子被子 Suite 继承</td></tr><tr><td>洋葱模型</td><td>aroundEach setup/teardown 分离——比 before/after 更灵活的包裹模式</td></tr><tr><td>超时双重检查</td><td>setTimeout + performance.now() 解决微任务超时问题</td></tr><tr><td>信号量并发</td><td>limitConcurrency 实现可配置的并发限制</td></tr><tr><td>标签优先级</td><td>配置继承 + 优先级排序——CSS 层叠风格的设计</td></tr></table>
+
+<div class="page-nav"><a href="index.html">← 返回总览</a><a href="module-mocker.html">Mocker 模块模拟 →</a></div></section></main></div><script>(function(){if(window.innerWidth>1024)return;var s=document.getElementById('sidebar'),b=document.createElement('div');b.className='sidebar-backdrop';b.onclick=function(){s.classList.remove('open');b.classList.remove('open')};document.body.appendChild(b);var btn=document.createElement('button');btn.textContent='☰ 目录';btn.style.cssText='position:fixed;bottom:20px;right:20px;z-index:200;padding:10px 16px;border-radius:24px;border:none;background:var(--color-primary);color:#fff;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.2)';btn.onclick=function(){s.classList.toggle('open');b.classList.toggle('open')};document.body.appendChild(btn)})()</script></body></html>

@@ -1,0 +1,92 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Mocker 模块模拟 · Vitest 深度解构</title><link rel="stylesheet" href="style.css"></head><body><div class="layout"><aside class="sidebar" id="sidebar"><div class="sidebar-header">Vitest 解构</div><div class="sidebar-title"><a href="index.html">← Vitest</a></div><ul class="sidebar-nav"><li><a href="#overview">模块概览</a></li><li><a href="#hoist">Hoist Mock 机制</a></li><li><a href="#redirect">Mock 路径解析</a></li><li><a href="#interceptor">Vite 拦截插件</a></li><li><a href="#browser">浏览器端实现</a></li><li><a href="#automocker">自动 Mock</a></li><li><a href="#contrast">如果我来写</a></li><li><a href="#summary">学习要点</a></li></ul></aside><main class="main" id="main-content"><div class="page-header"><h1>🎭 Mocker 模块模拟</h1><p class="subtitle"><code>@vitest/mocker</code> — 通过 Vite 插件体系实现编译时 + 运行时的双阶段模块模拟。</p><div class="badges"><span class="badge badge-primary">核心模块</span><span class="badge">27 源文件</span><span class="badge badge-accent">node+browser 双端</span></div></div>
+
+<section id="overview"><h2>1. 模块定位</h2><p>Mocker 是 Vitest 中技术含量最高的模块之一。它需要在不修改用户代码的前提下，<strong>在模块加载阶段"拦截"并替换导入</strong>。不同于 Jest 的 <code>jest-runtime</code> 全量接管，Vitest 选择了更轻量的策略：<strong>作为 Vite 插件插入模块转换管道</strong>。</p>
+
+<pre class="mermaid">graph TB
+    subgraph "编译阶段 (Vite Plugin)"
+        HP[hoistMocksPlugin] --> |AST 改写| CODE["注入 __vite_ssr_import__"]
+        IP[interceptorPlugin] --> |模块重定向| RESOLVE["解析到 mock 文件"]
+        AP[automockPlugin] --> |自动生成| AUTO["创建空模块骨架"]
+    end
+    subgraph "运行阶段"
+        VI[vi.mock / vi.spyOn] --> |运行时注册| REG[MockerRegistry]
+        REG --> |查找 mock 实现| LOAD["加载 mock 模块"]
+    end
+    subgraph "浏览器端"
+        MSW[MSW Interceptor] --> FETCH["拦截 fetch"]
+        NATIVE[Native Interceptor] --> IMPORT["拦截 import()"]
+    end
+    CODE --> LOAD
+    RESOLVE --> LOAD
+
+    style HP fill:#7c3aed,color:#fff
+    style IP fill:#2563eb,color:#fff
+    style VI fill:#059669,color:#fff
+</pre><p class="mermaid-caption">图：Mocker 编译时 + 运行时双阶段架构</p></section>
+
+<section id="hoist"><h2>2. Hoist Mock 机制</h2>
+<p>这是 Mocker 中最精巧的设计。JavaScript 的 <code>import</code> 语句必须放在模块顶层，且在用户代码执行前就已经解析完毕。这意味着：<strong>如果用户在 <code>vi.mock()</code> 之后才 import 目标模块，mock 不会生效</strong>。</p>
+
+<p>Vitest 的解决方案是 <strong>AST 级代码改写</strong>：在 Vite 转换阶段，扫描所有 <code>vi.mock()</code> 调用，将它们<strong>提升（hoist）到文件顶部</strong>，并转换为特殊的 <code>__vite_ssr_import__</code> 调用。</p>
+
+<div class="code-ref"><div class="code-ref__header"><span class="code-ref__path">packages/mocker/src/node/hoistMocks.ts:1-45</span><a class="code-ref__link" href="vscode://file/Users/chenzedong/Desktop/zedong/vitest/packages/mocker/src/node/hoistMocks.ts:1:0">IDE 打开</a></div><pre><code><span class="cm">// ★ Hoist 配置——控制哪些调用需要提升</span>
+<span class="kw">interface</span> HoistMocksOptions {
+  hoistedModule?: <span class="type">string</span>           <span class="cm">// 默认 'vitest'</span>
+  utilsObjectNames?: <span class="type">string[]</span>        <span class="cm">// 默认 ["vi", "vitest"]</span>
+  hoistableMockMethodNames?: <span class="type">string[]</span> <span class="cm">// 默认 ["mock", "unmock"]</span>
+  dynamicImportMockMethodNames?: <span class="type">string[]</span> <span class="cm">// 默认 ["mock","unmock","doMock","doUnmock"]</span>
+  hoistedMethodNames?: <span class="type">string[]</span>      <span class="cm">// 默认 ["hoisted"]</span>
+}</code></pre></div>
+
+<div class="arch-highlight"><h4>🔍 Hoist 改写示例</h4><p style="margin:8px 0 0;color:var(--color-text-secondary)"><strong>原始代码</strong>：<code>import { fn } from './mod'; vi.mock('./mod');</code></p><p style="margin:8px 0;color:var(--color-text-secondary)"><strong>改写后</strong>：<code>vi.mock('./mod'); const { fn } = await __vite_ssr_import__('./mod');</code></p><p style="margin:8px 0 0;color:var(--color-text-secondary)">将 <code>import</code> 声明转换为动态 <code>__vite_ssr_import__</code>，确保 mock 注册在导入之前完成。使用 <code>acorn-walk</code> + <code>MagicString</code> 进行精确的 AST 节点替换。</p></div></section>
+
+<section id="redirect"><h2>3. Mock 路径解析</h2>
+<p>当 <code>vi.mock('./foo')</code> 被调用时，Mocker 需要找到对应的 mock 实现文件。规则与 Jest 兼容：</p>
+<ul><li><strong>同级目录</strong>：<code>./foo</code> → <code>./__mocks__/foo.ts</code></li><li><strong>node_modules</strong>：<code>lodash</code> → <code>__mocks__/lodash.ts</code>（项目根目录）</li><li><strong>Node 内置模块</strong>：<code>fs</code> → <code>__mocks__/fs.ts</code></li></ul>
+
+<div class="code-ref"><div class="code-ref__header"><span class="code-ref__path">packages/mocker/src/node/redirect.ts:7-55</span><a class="code-ref__link" href="vscode://file/Users/chenzedong/Desktop/zedong/vitest/packages/mocker/src/node/redirect.ts:7:0">IDE 打开</a></div><pre><code><span class="cm">// ★ findMockRedirect: 标准 __mocks__ 目录查找</span>
+<span class="kw">export function</span> <span class="fn">findMockRedirect</span>(root, mockPath, external) {
+  <span class="kw">const</span> path = external || mockPath
+  <span class="kw">if</span> (external || <span class="fn">isNodeBuiltin</span>(mockPath) || !<span class="fn">existsSync</span>(mockPath)) {
+    <span class="kw">const</span> mockFolder = <span class="fn">join</span>(root, <span class="str">'__mocks__'</span>, <span class="fn">dirname</span>(path))
+    <span class="kw">if</span> (!<span class="fn">existsSync</span>(mockFolder)) <span class="kw">return null</span>
+    <span class="cm">// ★ 支持嵌套包: @scope/pkg → __mocks__/@scope/pkg.ts</span>
+    <span class="kw">return</span> <span class="fn">findFile</span>(mockFolder, <span class="fn">basename</span>(path))
+  }
+  <span class="cm">// 同级目录: ./foo → ./__mocks__/foo.ts</span>
+  <span class="kw">const</span> fullPath = <span class="fn">resolve</span>(<span class="fn">dirname</span>(path), <span class="str">'__mocks__'</span>, <span class="fn">basename</span>(path))
+  <span class="kw">return</span> <span class="fn">existsSync</span>(fullPath) ? fullPath : <span class="kw">null</span>
+}</code></pre></div></section>
+
+<section id="interceptor"><h2>4. Vite 拦截插件</h2>
+<p>Mocker 通过 6 个 Vite 插件实现模块拦截：</p>
+<table><tr><th>插件</th><th>职责</th></tr><tr><td><code>hoistMocksPlugin</code></td><td>AST 改写：将 vi.mock 提升到文件顶部</td></tr><tr><td><code>interceptorPlugin</code></td><td>模块加载时拦截：检查注册表中是否有 mock 实现</td></tr><tr><td><code>mockerPlugin</code></td><td>主插件：协调所有子插件，管理 mock 注册表</td></tr><tr><td><code>automockPlugin</code></td><td>自动生成空 mock 模块（所有导出替换为 vi.fn()）</td></tr><tr><td><code>dynamicImportPlugin</code></td><td>处理动态 <code>import()</code> 的拦截</td></tr><tr><td><code>ServerMockResolver</code></td><td>服务端 mock 路径解析器</td></tr></table></section>
+
+<section id="browser"><h2>5. 浏览器端实现</h2>
+<p>在浏览器环境中，无法使用 Vite 插件拦截模块加载。Mocker 提供两种替代方案：</p>
+<ul><li><strong>MSW (Mock Service Worker)</strong>：通过 Service Worker 拦截 <code>fetch</code> 请求，将模块请求重定向到 mock 实现</li><li><strong>Native Interceptor</strong>：利用 <code>import()</code> 的动态特性，在运行时替换模块引用</li></ul>
+<div class="code-ref"><div class="code-ref__header"><span class="code-ref__path">packages/mocker/src/browser/index.ts</span></div><pre><code><span class="cm">// ★ 浏览器端导出——与 Node 端 API 一致</span>
+<span class="kw">export</span> { ModuleMockerMSWInterceptor } <span class="kw">from</span> <span class="str">'./interceptor-msw'</span>
+<span class="kw">export</span> { ModuleMockerServerInterceptor } <span class="kw">from</span> <span class="str">'./interceptor-native'</span>
+<span class="kw">export</span> { ModuleMocker } <span class="kw">from</span> <span class="str">'./mocker'</span></code></pre></div></section>
+
+<section id="automocker"><h2>6. 自动 Mock</h2>
+<p><code>vi.mock('./mod')</code> 不提供实现时，Vitest 会自动创建一个 mock 模块：<strong>所有导出函数被替换为 <code>vi.fn()</code></strong>，对象/类被递归替换。</p>
+<div class="code-ref"><div class="code-ref__header"><span class="code-ref__path">packages/mocker/src/node/automock.ts</span></div><pre><code><span class="cm">// ★ automockModule: 遍历模块导出，递归创建 mock</span>
+<span class="kw">export async function</span> <span class="fn">automockModule</span>(mod) {
+  <span class="kw">for</span> (<span class="kw">const</span> key <span class="kw">of</span> Object.keys(mod)) {
+    <span class="kw">const</span> val = mod[key]
+    <span class="kw">if</span> (<span class="kw">typeof</span> val === <span class="str">'function'</span>) mod[key] = <span class="fn">vi.fn</span>(val)
+    <span class="kw">else if</span> (<span class="kw">typeof</span> val === <span class="str">'object'</span> &amp;&amp; val !== <span class="kw">null</span>) <span class="fn">automockModule</span>(val)
+  }
+}</code></pre></div></section>
+
+<section id="contrast"><h2>7. "如果我来写" 对比思考</h2>
+
+<div class="callout callout-insight"><div class="callout-title">🧠 问题：如何让 vi.mock 在 import 之前生效？</div><p><strong>直觉方案</strong>：像 Jest 一样自己实现一个 <code>require</code> 运行时，完全接管模块加载流程。</p><p><strong>Vitest 的做法</strong>：<code>hoistMocksPlugin</code> 在 Vite 转换阶段进行 AST 改写——将 <code>vi.mock()</code> 提升到文件顶部，将 <code>import</code> 转换为 <code>__vite_ssr_import__</code>。</p><p><strong>差异分析</strong>：Jest 的 <code>jest-runtime</code> 是一套完整的模块系统——它在 V8 虚拟机中手动实现 <code>require</code>，这很强大但也导致了很多兼容性问题（ESM、top-level await）。Vitest 的 AST 改写方案更轻量——它<strong>不改变模块系统的语义</strong>，只是重排了执行顺序。这得益于 Vite 对 SSR 模块图的原生支持。</p></div>
+
+<div class="callout callout-insight"><div class="callout-title">🧠 问题：如何跟踪哪些模块被 mock 了？</div><p><strong>直觉方案</strong>：全局限流表（global Map）。</p><p><strong>Vitest 的做法</strong>：<code>MockerRegistry</code>（<code>registry.ts</code>）——一个按文件路径隔离的注册表。每个测试文件有自己的 mock 注册表，<code>vi.mock()</code> 只在当前文件生效。</p><p><strong>差异分析</strong>：全局注册表会导致测试之间的 mock 污染——文件 A 的 mock 意外影响文件 B。按文件隔离确保 <strong>mock 的作用域与测试文件绑定</strong>，这是保证测试隔离性的关键设计。</p></div></section>
+
+<section id="summary"><h2>8. 学习要点</h2>
+<table><tr><th>🏗️ 学习主题</th><th>关键收获</th></tr><tr><td>Hoist 机制</td><td>AST 改写实现代码提升——不改变语义，只重排顺序</td></tr><tr><td>Vite 插件拦截</td><td>利用 Vite 的 resolveId/load 钩子实现模块重定向</td></tr><tr><td>双端实现</td><td>Node 用 Vite 插件，Browser 用 Service Worker——API 保持统一</td></tr><tr><td>Mock 注册表</td><td>按文件隔离的注册表——防止跨文件 mock 污染</td></tr><tr><td>自动 Mock</td><td>递归替换导出为 vi.fn()——零配置 mock 支持</td></tr></table>
+<div class="page-nav"><a href="module-runner.html">← Runner 执行引擎</a><a href="module-expect.html">Expect 断言系统 →</a></div></section></main></div><script>(function(){if(window.innerWidth>1024)return;var s=document.getElementById('sidebar'),b=document.createElement('div');b.className='sidebar-backdrop';b.onclick=function(){s.classList.remove('open');b.classList.remove('open')};document.body.appendChild(b);var btn=document.createElement('button');btn.textContent='☰ 目录';btn.style.cssText='position:fixed;bottom:20px;right:20px;z-index:200;padding:10px 16px;border-radius:24px;border:none;background:var(--color-primary);color:#fff;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.2)';btn.onclick=function(){s.classList.toggle('open');b.classList.toggle('open')};document.body.appendChild(btn)})()</script></body></html>

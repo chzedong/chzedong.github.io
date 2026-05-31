@@ -1,0 +1,71 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Vitest 核心架构 · 深度解构</title><link rel="stylesheet" href="style.css"></head><body><div class="layout"><aside class="sidebar" id="sidebar"><div class="sidebar-header">Vitest 解构</div><div class="sidebar-title"><a href="index.html">← Vitest</a></div><ul class="sidebar-nav"><li><a href="#overview">模块概览</a></li><li><a href="#cli">CLI 入口</a></li><li><a href="#config">配置解析</a></li><li><a href="#pool">Worker 池</a></li><li><a href="#project">Project 系统</a></li><li><a href="#reporter">Reporter 管道</a></li><li><a href="#lifecycle">完整生命周期</a></li><li><a href="#contrast">如果我来写</a></li></ul></aside><main class="main" id="main-content"><div class="page-header"><h1>⚙️ Vitest 核心架构</h1><p class="subtitle"><code>packages/vitest</code> 主包 — CLI 入口、配置解析、Worker 池管理、Vite 集成、Reporter 管道。</p><div class="badges"><span class="badge badge-primary">主包</span><span class="badge">~90 源文件</span><span class="badge badge-accent">1707 行 core.ts</span></div></div>
+
+<section id="cli"><h2>1. CLI 入口</h2>
+<p>Vitest 的 CLI 非常精简：仅 3 行代码。它使用 <code>cac</code>（一个迷你 CLI 框架）管理命令。入口文件委托给 <code>./cli/cac</code> 创建 CLI 实例。</p>
+<div class="code-ref"><div class="code-ref__header"><span class="code-ref__path">packages/vitest/src/node/cli.ts</span></div><pre><code><span class="kw">import</span> { createCLI } <span class="kw">from</span> <span class="str">'./cli/cac'</span>
+<span class="fn">createCLI</span>().<span class="fn">parse</span>()</code></pre></div></section>
+
+<section id="config"><h2>2. 配置解析</h2>
+<p><code>resolveConfig()</code> 是 Vitest 的核心配置合并函数，位于 <code>packages/vitest/src/node/config/resolveConfig.ts</code>。它按优先级合并三部分配置：</p>
+<ol><li><code>vitestDefaults</code>（内置默认值）</li><li><code>vite.config.ts</code> 中的 <code>test</code> 字段</li><li>CLI 参数（最高优先级）</li></ol>
+
+<div class="callout callout-tip"><div class="callout-title">💡 关键设计</div><p>Vitest 复用 Vite 的 <code>defineConfig</code> 和 <code>mergeConfig</code>，在 <code>vite.config.ts</code> 中通过 <code>test</code> 字段配置测试行为。这意味着 <strong>一个文件同时定义构建和测试配置</strong>——不需要维护 <code>jest.config.js</code> 或 <code>vitest.config.ts</code>（虽然 vitest 也支持独立配置文件）。</p></div></section>
+
+<section id="pool"><h2>3. Worker 池管理</h2>
+<p>Worker 池负责创建和管理测试执行的工作进程/线程。支持三种池模式：</p>
+<table><tr><th>模式</th><th>类型</th><th>适用场景</th></tr><tr><td><code>threads</code></td><td>Worker Threads</td><td>默认，轻量，共享内存</td></tr><tr><td><code>forks</code></td><td>Child Process</td><td>需要进程隔离（原生模块）</td></tr><tr><td><code>vmThreads</code></td><td>VM + Threads</td><td>极致隔离（实验性）</td></tr></table>
+
+<p>Worker 池使用 <code>birpc</code>（双向 RPC 库）与主进程通信。主进程通过 RPC 发送 <code>startTests()</code> 命令，Worker 返回测试结果。</p>
+<div class="code-ref"><div class="code-ref__header"><span class="code-ref__path">packages/vitest/src/node/pool.ts</span></div><pre><code><span class="cm">// ★ ProcessPool: 管理 Worker 生命周期</span>
+<span class="kw">export</span> <span class="kw">interface</span> ProcessPool {
+  runTests(specs: TestSpecification[]): Promise&lt;<span class="kw">void</span>&gt;
+  close(): Promise&lt;<span class="kw">void</span>&gt;
+}</code></pre></div></section>
+
+<section id="project"><h2>4. Multi-Project 系统</h2>
+<p>Vitest 支持在同一个 workspace 中运行多个项目（monorepo 场景）。每个 <code>TestProject</code> 实例拥有独立的 ViteDevServer、配置和测试文件列表。</p>
+<div class="code-ref"><div class="code-ref__header"><span class="code-ref__path">packages/vitest/src/node/core.ts:336-349</span></div><pre><code><span class="cm">// ★ 项目解析：扫描 workspace 中的测试项目</span>
+<span class="kw">this</span>.projects = <span class="kw">await this</span>.<span class="fn">resolveProjects</span>(<span class="kw">this</span>._cliOptions)
+<span class="kw">if</span> (<span class="kw">this</span>._cliOptions.benchmarkOnly) {
+  <span class="kw">this</span>.projects = <span class="kw">this</span>.projects.filter(c => c.config.benchmark.enabled)
+}
+<span class="cm">// ★ 触发 configureVitest 插件钩子</span>
+<span class="kw">await</span> Promise.all(<span class="kw">this</span>.projects.flatMap((project) => {
+  <span class="kw">const</span> hooks = project.vite.config.getSortedPluginHooks(<span class="str">'configureVitest'</span>)
+  <span class="kw">return</span> hooks.map(hook => hook({ project, vitest: <span class="kw">this</span> }))
+}))</code></pre></div></section>
+
+<section id="reporter"><h2>5. Reporter 管道</h2>
+<p>Vitest 的 Reporter 系统采用<strong>观察者模式</strong>——多个 Reporter 同时监听测试事件，各自产生不同格式的输出：</p>
+<table><tr><th>Reporter</th><th>输出</th></tr><tr><td><code>default</code></td><td>终端彩色输出</td></tr><tr><td><code>verbose</code></td><td>详细模式（每个测试结果）</td></tr><tr><td><code>json</code></td><td>JSON 文件（机器可读）</td></tr><tr><td><code>junit</code></td><td>JUnit XML（CI 集成）</td></tr><tr><td><code>html</code></td><td>HTML 报告</td></tr><tr><td><code>blob</code></td><td>二进制 blob（跨 worker 合并）</td></tr></table></section>
+
+<section id="lifecycle"><h2>6. 完整生命周期</h2>
+<pre class="mermaid">sequenceDiagram
+    participant CLI
+    participant V as Vitest
+    participant VS as ViteDevServer
+    participant P as TestProject
+    participant W as Worker Pool
+    participant R as Reporter
+
+    CLI-&gt;&gt;V: new Vitest(cliOptions)
+    V-&gt;&gt;V: resolveConfig()
+    V-&gt;&gt;VS: createServer()
+    VS--&gt;&gt;V: server ready
+    V-&gt;&gt;P: resolveProjects()
+    P--&gt;&gt;V: projects[]
+    V-&gt;&gt;W: createPool()
+    V-&gt;&gt;P: collectTests()
+    P-&gt;&gt;W: runTests(specs)
+    W--&gt;&gt;P: test results
+    P-&gt;&gt;R: report(results)
+    R--&gt;&gt;CLI: output
+</pre><p class="mermaid-caption">图：完整生命周期 —— 从 CLI 到 Reporter 的输出链路</p></section>
+
+<section id="contrast"><h2>7. "如果我来写" 对比思考</h2>
+
+<div class="callout callout-insight"><div class="callout-title">🧠 问题：如何管理 Vite Server 的重启？</div><p><strong>直觉方案</strong>：在 watch 模式下监听文件变更，手动重启 server。</p><p><strong>Vitest 的做法</strong>：劫持（hijack）<code>server.restart</code> 方法（<code>core.ts:308-314</code>）。在 server 重启前，Vitest 先执行 onRestart 监听器、上报事件、关闭所有 pool 和 project。</p><p><strong>差异分析</strong>：劫持模式避免了"文件变更 → 手动关闭 → 重建 → 重跑"的脆弱链。通过插件化重启钩子，Vitest 保证 <strong>重启是可扩展的</strong>——第三方插件可以注册 onRestart 回调来清理自己的状态。</p></div>
+
+<div class="callout callout-insight"><div class="callout-title">🧠 问题：如何处理多个 Project 的配置隔离？</div><p><strong>直觉方案</strong>：所有 Project 共享一个全局 ViteDevServer。</p><p><strong>Vitest 的做法</strong>：每个 <code>TestProject</code> 持有独立的 ViteDevServer 环境（通过 <code>server.environments</code>）。这意味着不同 Project 可以使用不同的模块解析、不同的测试环境（jsdom/happy-dom/node）。</p><p><strong>差异分析</strong>：共享 server 虽然简单，但不同 project 可能有冲突的配置（比如不同的 <code>resolve.alias</code>）。独立环境带来的 <strong>配置隔离性</strong> 是 monorepo 场景正确运行的基础。</p></div></section>
+
+<div class="page-nav"><a href="module-expect.html">← Expect 断言系统</a><a href="module-snapshot.html">Snapshot 快照系统 →</a></div></main></div><script>(function(){if(window.innerWidth>1024)return;var s=document.getElementById('sidebar'),b=document.createElement('div');b.className='sidebar-backdrop';b.onclick=function(){s.classList.remove('open');b.classList.remove('open')};document.body.appendChild(b);var btn=document.createElement('button');btn.textContent='☰ 目录';btn.style.cssText='position:fixed;bottom:20px;right:20px;z-index:200;padding:10px 16px;border-radius:24px;border:none;background:var(--color-primary);color:#fff;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.2)';btn.onclick=function(){s.classList.toggle('open');b.classList.toggle('open')};document.body.appendChild(btn)})()</script></body></html>
