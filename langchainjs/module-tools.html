@@ -1,0 +1,33 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Tools & MCP · LangChain.js 深度解构</title><link rel="stylesheet" href="style.css"></head><body><div class="layout"><aside class="sidebar" id="sidebar"><div class="sidebar-header">LangChain.js 解构</div><div class="sidebar-title"><a href="index.html">← LangChain.js</a></div><ul class="sidebar-nav"><li><a href="#overview">模块概览</a></li><li><a href="#structured-tool">StructuredTool</a></li><li><a href="#tool-calling">工具调用协议</a></li><li><a href="#mcp">MCP 适配器</a></li><li><a href="#contrast">如果我来写</a></li></ul></aside><main class="main"><div class="page-header"><h1>🔧 Tools &amp; MCP</h1><p class="subtitle">StructuredTool、工具调用协议、MCP 适配器、多 Provider 工具生态。</p><div class="badges"><span class="badge badge-primary">扩展模块</span><span class="badge">@langchain/core/tools</span><span class="badge badge-accent">MCP 支持</span></div></div>
+
+<section id="overview"><h2>1. 模块定位</h2><p>Tools 系统是 LangChain Agent 的"手和脚"——它让 LLM 能够<strong>调用外部函数、查询数据库、搜索网络</strong>。Tools 系统设计为一个独立的子包 <code>@langchain/core/tools</code>，同时提供 MCP（Model Context Protocol）适配器来对接外部工具服务器。</p></section>
+
+<section id="structured-tool"><h2>2. StructuredTool</h2>
+<p><code>StructuredTool</code> 是所有工具的基类。它接受 Zod schema 来定义输入参数的结构，并提供 <code>invoke()</code> 方法执行工具逻辑：</p>
+<div class="code-ref"><div class="code-ref__header"><span class="code-ref__path">libs/langchain-core/src/tools/types.ts:58+</span></div><pre><code><span class="cm">// ★ Tool 定义了 schema（输入类型）+ func（业务逻辑）+ metadata</span>
+<span class="kw">export abstract class</span> <span class="type">BaseTool</span> {
+  <span class="kw">abstract</span> name: <span class="type">string</span>
+  <span class="kw">abstract</span> description: <span class="type">string</span>
+  <span class="kw">abstract</span> schema: InteropZodObject  <span class="cm">// ★ Zod v3/v4 兼容</span>
+
+  <span class="kw">abstract</span> _call(
+    input: InferInteropZodInput&lt;this[<span class="str">'schema'</span>]&gt;,
+    runManager?: CallbackManagerForToolRun,
+    config?: RunnableConfig
+  ): Promise&lt;<span class="kw">string</span>&gt;
+}</code></pre></div>
+<ul><li><code>StructuredTool</code> — 标准工具：schema + func</li><li><code>DynamicTool</code> — 动态工具：运行时解析 schema</li><li><code>tool()</code> helper — 工厂函数，一行创建工具</li><li><code>RunnableToolLike</code> — 任何实现 Runnable 的都可以作为工具</li></ul></section>
+
+<section id="tool-calling"><h2>3. 工具调用协议</h2>
+<p>LangChain 的工具调用遵循标准协议：</p>
+<ol><li>用户消息 → Model 产生 <code>AIMessage</code>（含 <code>tool_calls</code> 字段）</li><li><code>tool_calls</code> 包含 <code>{ name, args, id }</code> — 标准化的工具调用描述</li><li>Agent 解析 tool_calls → 执行对应工具 → 返回 <code>ToolMessage</code></li><li>ToolMessage 追加到对话历史，继续下一次推理循环</li></ol></section>
+
+<section id="mcp"><h2>4. MCP 适配器</h2>
+<p><code>@langchain/mcp-adapters</code> 将 MCP（Model Context Protocol）服务器的工具转换为 LangChain 的 Tool 对象：</p>
+<ul><li><strong>MCP Tools</strong> — MCP 服务器暴露的工具函数 → LangChain StructuredTool</li><li><strong>MCP Resources</strong> — MCP 资源（文件、数据库等）→ LangChain 可查询的数据源</li><li><strong>MCP Prompts</strong> — MCP 提示模板 → LangChain PromptTemplate</li></ul>
+<p>这使得任何兼容 MCP 的工具服务器（如数据库客户端、API 网关）都可以被 LangChain Agent 直接调用。</p></section>
+
+<section id="contrast"><h2>5. "如果我来写" 对比思考</h2>
+<div class="callout callout-insight"><div class="callout-title">🧠 问题：如何让工具定义与类型系统对齐？</div><p><strong>直觉方案</strong>：JSON Schema 定义输入，func 签名用 any。</p><p><strong>LangChain 的做法</strong>：Zod schema 驱动一切——<code>InteropZodType</code> 同时兼容 Zod v3 和 v4，通过 <code>InferInteropZodInput</code> 自动推导 TypeScript 类型。</p><p><strong>差异分析</strong>：用 Zod 的好处是工具定义<strong>可直接序列化为 JSON Schema</strong>（用于 function calling 的 API 请求），同时保持类型安全——修改 schema 后 func 签名自动更新，编译时报错而非运行时崩溃。</p></div></section>
+
+<div class="page-nav"><a href="module-langchain.html">← Agent & Middleware</a><a href="module-providers.html">Provider 集成模式 →</a></div></main></div><script>(function(){if(window.innerWidth>1024)return;var s=document.getElementById('sidebar'),b=document.createElement('div');b.className='sidebar-backdrop';b.onclick=function(){s.classList.remove('open');b.classList.remove('open')};document.body.appendChild(b);var btn=document.createElement('button');btn.textContent='☰ 目录';btn.style.cssText='position:fixed;bottom:20px;right:20px;z-index:200;padding:10px 16px;border-radius:24px;border:none;background:var(--color-primary);color:#fff;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.2)';btn.onclick=function(){s.classList.toggle('open');b.classList.toggle('open')};document.body.appendChild(btn)})()</script></body></html>

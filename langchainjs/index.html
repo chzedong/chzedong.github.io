@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LangChain.js — LLM 应用框架 · 深度解构</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>mermaid.initialize({startOnLoad:true,theme:'default'})</script>
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">开源库解构</div>
+  <div class="sidebar-title"><a href="index.html">LangChain.js</a></div>
+  <ul class="sidebar-nav">
+    <li><a href="#background">项目背景</a></li>
+    <li><a href="#quickstart">快速上手</a></li>
+    <li><a href="#engineering">工程化方案</a></li>
+    <li><a href="#artifacts">项目制品</a></li>
+    <li><a href="#core-chain">核心链路</a></li>
+    <li><a href="#architecture">架构总图</a></li>
+    <li><a href="#modules">模块导航</a></li>
+    <li><a href="#summary">学习要点</a></li>
+  </ul>
+</aside>
+
+<main class="main" id="main-content">
+
+  <div class="page-header">
+    <h1>LangChain.js — LLM 应用框架</h1>
+    <p class="subtitle">TypeScript 框架，通过标准接口串联模型、工具、向量存储等组件，简化 AI 应用开发。</p>
+    <div class="badges">
+      <span class="badge badge-primary">v1.4.4</span>
+      <span class="badge badge-success">MIT License</span>
+      <span class="badge">TypeScript</span>
+      <span class="badge">pnpm Monorepo</span>
+      <span class="badge badge-accent">LangChain</span>
+      <span class="badge">33+ Providers</span>
+    </div>
+  </div>
+
+  <section id="background">
+    <h2>1. 项目背景</h2>
+    <p>LangChain.js 是 <strong>LangChain AI</strong> 开源的 JavaScript/TypeScript 框架，目标是成为"构建 LLM 应用的平台"。它提供一套统一的抽象接口——<strong>Runnable</strong>、<strong>Message</strong>、<strong>Tool</strong>、<strong>VectorStore</strong> 等——让开发者用一致的 API 对接 33+ 个模型提供商和工具集成。</p>
+
+    <div class="arch-highlight">
+      <h4>🎯 设计哲学</h4>
+      <p style="margin:8px 0 0;color:var(--color-text-secondary)">LangChain.js 的核心不是一个具体功能，而是一套<strong>可组合的接口规范</strong>。任何实现 <code>Runnable</code> 接口的组件都可以通过 <code>.pipe()</code>、<code>.bind()</code>、<code>.withFallbacks()</code> 等方法自由编排——这就是 LangChain 的核心竞争力：<strong>所有组件共享同一套编排原语</strong>。</p>
+    </div>
+
+    <p><strong>核心价值</strong>：</p>
+    <ul>
+      <li><strong>模型互操作性</strong> — 统一接口抹平 OpenAI / Anthropic / Google 等提供商的差异</li>
+      <li><strong>实时数据增强</strong> — RAG（检索增强生成）原生支持，向量存储、文档加载器一站式</li>
+      <li><strong>Agent 编排</strong> — 工具调用、多步推理、Human-in-the-loop 的完整基础设施</li>
+      <li><strong>跨环境运行</strong> — Node.js / Browser / Cloudflare Workers / Deno / Bun 全覆盖</li>
+    </ul>
+  </section>
+
+  <section id="quickstart">
+    <h2>2. 快速上手</h2>
+
+    <div class="code-ref">
+      <div class="code-ref__header"><span class="code-ref__path">基础调用 — 3 行代码调用 OpenAI</span></div>
+<pre><code><span class="kw">import</span> { ChatOpenAI } <span class="kw">from</span> <span class="str">"@langchain/openai"</span>
+
+<span class="kw">const</span> model = <span class="kw">new</span> <span class="type">ChatOpenAI</span>({ model: <span class="str">"gpt-4o"</span> })
+<span class="kw">const</span> response = <span class="kw">await</span> model.invoke(<span class="str">"Hello, world!"</span>)</code></pre>
+    </div>
+
+    <div class="code-ref">
+      <div class="code-ref__header"><span class="code-ref__path">Chain — 管道编排多个步骤</span></div>
+<pre><code><span class="kw">import</span> { ChatPromptTemplate } <span class="kw">from</span> <span class="str">"@langchain/core/prompts"</span>
+
+<span class="kw">const</span> prompt = ChatPromptTemplate.fromTemplate(
+  <span class="str">"Tell me a joke about {topic}"</span>
+)
+<span class="kw">const</span> chain = prompt.pipe(model)    <span class="cm">// ★ Runnable 管道</span>
+
+<span class="kw">const</span> result = <span class="kw">await</span> chain.invoke({ topic: <span class="str">"programmers"</span> })</code></pre>
+    </div>
+
+    <div class="code-ref">
+      <div class="code-ref__header"><span class="code-ref__path">Tool Calling — 模型调用外部工具</span></div>
+<pre><code><span class="kw">import</span> { tool } <span class="kw">from</span> <span class="str">"@langchain/core/tools"</span>
+<span class="kw">import</span> { z } <span class="kw">from</span> <span class="str">"zod/v3"</span>
+
+<span class="kw">const</span> weatherTool = <span class="fn">tool</span>(
+  <span class="kw">async</span> ({ city }) => <span class="fn">`The weather in </span><span class="str">${city}</span><span class="fn"> is sunny`</span>,
+  { name: <span class="str">"get_weather"</span>, schema: z.object({ city: z.string() }) }
+)
+
+<span class="kw">const</span> agent = model.bindTools([weatherTool])
+<span class="kw">const</span> response = <span class="kw">await</span> agent.invoke(<span class="str">"What's the weather in Tokyo?"</span>)
+<span class="cm">// → response.tool_calls[0].name === "get_weather"</span></code></pre>
+    </div>
+  </section>
+
+  <section id="engineering">
+    <h2>3. 工程化方案</h2>
+    <table>
+      <tr><th>类别</th><th>工具</th><th>备注</th></tr>
+      <tr><td>包管理</td><td>pnpm (v10)</td><td>workspace + catalog 模式</td></tr>
+      <tr><td>构建</td><td>tsdown (基于 rolldown)</td><td>每个子包独立 tsdown.config.ts</td></tr>
+      <tr><td>TypeScript</td><td>tsc v6</td><td>共享 tsconfig，strict mode</td></tr>
+      <tr><td>Lint</td><td>oxlint + oxfmt</td><td>Rust 实现，极速</td></tr>
+      <tr><td>测试</td><td>Vitest v4</td><td>*.test.ts / *.int.test.ts 分离</td></tr>
+      <tr><td>版本管理</td><td>Changesets</td><td>多包独立版本发布</td></tr>
+      <tr><td>Monorepo</td><td>Turborepo</td><td>增量构建 + 并行任务</td></tr>
+    </table>
+  </section>
+
+  <section id="artifacts">
+    <h2>4. 项目制品</h2>
+    <table>
+      <tr><th>包名</th><th>职责</th></tr>
+      <tr><td><code>@langchain/core</code></td><td>★ 核心抽象：Runnable / Messages / Tools / LLMs / Prompts</td></tr>
+      <tr><td><code>langchain</code></td><td>★ 高层封装：Agent / Middleware / Hub / Chain / Universal Chat Models</td></tr>
+      <tr><td><code>@langchain/textsplitters</code></td><td>文本分割工具（Markdown / Recursive / Code 分割器）</td></tr>
+      <tr><td><code>@langchain/mcp-adapters</code></td><td>MCP 协议适配器（工具 + 资源 + 提示）</td></tr>
+      <tr><td><code>@langchain/openai</code></td><td>OpenAI 集成（Chat + Embeddings + TTS）</td></tr>
+      <tr><td><code>@langchain/anthropic</code></td><td>Anthropic Claude 集成</td></tr>
+      <tr><td><code>@langchain/google-genai</code></td><td>Google Gemini 集成</td></tr>
+      <tr><td><code>@langchain/deepseek</code></td><td>DeepSeek 集成</td></tr>
+      <tr><td>… 29 个其他 providers</td><td>Pinecone / Qdrant / MongoDB / Redis 等</td></tr>
+    </table>
+  </section>
+
+  <section id="core-chain">
+    <h2>5. 核心链路</h2>
+
+    <h3>5.1 Runnable — 一切皆可编排</h3>
+    <p>LangChain.js 的核心思想：<strong>所有组件都实现 <code>Runnable</code> 接口</strong>。无论是 LLM 调用、Prompt 模板、还是 Agent 决策——它们共享相同的 <code>invoke</code> / <code>stream</code> / <code>batch</code> 方法。</p>
+
+    <pre class="mermaid">
+graph TB
+    subgraph "Runnable 接口 (核心抽象)"
+        INVOKE["invoke(input) → output"]
+        STREAM["stream(input) → AsyncIterator"]
+        BATCH["batch(inputs[]) → outputs[]"]
+    end
+
+    subgraph "具体实现"
+        LLM["ChatModel<br/>(OpenAI/Anthropic/...)"]
+        PROMPT["PromptTemplate"]
+        TOOL["StructuredTool"]
+        CHAIN["RunnableSequence<br/>(chain = a.pipe(b))"]
+        RETRIEV["Retriever / VectorStore"]
+    end
+
+    INVOKE -.-> LLM
+    INVOKE -.-> PROMPT
+    INVOKE -.-> TOOL
+    INVOKE -.-> CHAIN
+    INVOKE -.-> RETRIEV
+
+    style INVOKE fill:#7c3aed,color:#fff
+</pre>
+    <p class="mermaid-caption">图：Runnable 接口 — 所有组件共享同一套编排原语</p>
+
+    <h3>5.2 Agent 执行流程</h3>
+    <pre class="mermaid">
+sequenceDiagram
+    participant U as User
+    participant A as Agent
+    participant M as ChatModel
+    participant T as Tools
+    participant MW as Middleware
+
+    U->>A: invoke("query")
+    A->>MW: beforeModel hook
+    MW->>A: modified messages
+    loop Agent Loop
+        A->>M: invoke(messages)
+        M-->>A: response (text / tool_calls)
+        A->>MW: afterModel hook
+        alt has tool_calls
+            A->>T: invoke(tool_call)
+            T-->>A: ToolMessage
+            A->>MW: afterTool hook
+        else no tool_calls
+            A-->>U: final response
+        end
+    end
+</pre>
+    <p class="mermaid-caption">图：Agent 执行流程 — Model ↔ Tools 循环 + Middleware 拦截</p>
+  </section>
+
+  <section id="architecture">
+    <h2>6. 架构总图</h2>
+    <pre class="mermaid">
+graph TB
+    subgraph "@langchain/core"
+        RUN["Runnable 接口<br/>base.ts (3542行)"]
+        MSG["Messages 系统<br/>Human/AI/System/Tool"]
+        TOOL["Tools 系统<br/>StructuredTool"]
+        LLM["Language Models<br/>BaseChatModel"]
+        CB["Callbacks 回调系统<br/>dispatch/manager"]
+        PR["Prompts / Output Parsers"]
+    end
+
+    subgraph "langchain"
+        AG["Agent + Middleware<br/>contextEditing/dynamicSP/hitl"]
+        HU["Hub (LangChain Hub)"]
+        CH["Chain 构建器"]
+        UC["UniversalChatModel"]
+    end
+
+    subgraph "Providers (33+)"
+        OAI["@langchain/openai"]
+        ANT["@langchain/anthropic"]
+        GEN["@langchain/google-genai"]
+        DSK["@langchain/deepseek"]
+        PIN["@langchain/pinecone"]
+        QDR["@langchain/qdrant"]
+    end
+
+    RUN --> MSG
+    RUN --> TOOL
+    RUN --> LLM
+    RUN --> CB
+    AG --> RUN
+    CH --> RUN
+    UC --> LLM
+    OAI --> LLM
+    ANT --> LLM
+    GEN --> LLM
+
+    style RUN fill:#7c3aed,color:#fff
+    style AG fill:#2563eb,color:#fff
+    style LLM fill:#059669,color:#fff
+</pre>
+    <p class="mermaid-caption">图：LangChain.js 架构总图 — 三层架构：Core / langchain / Providers</p>
+  </section>
+
+  <section id="modules">
+    <h2>7. 模块深度导航</h2>
+    <div class="module-grid">
+      <a class="module-card" href="module-core.html">
+        <h4>🧬 Core 核心抽象</h4>
+        <p>Runnable / Messages / Language Models / Callbacks / Prompts</p>
+        <span class="tag">核心</span>
+      </a>
+      <a class="module-card" href="module-langchain.html">
+        <h4>🤖 Agent &amp; Middleware</h4>
+        <p>Agent 执行引擎、中间件系统、Human-in-the-loop、LangChain Hub</p>
+        <span class="tag">高层</span>
+      </a>
+      <a class="module-card" href="module-tools.html">
+        <h4>🔧 Tools &amp; MCP</h4>
+        <p>StructuredTool、工具调用协议、MCP 适配器、多 Provider 工具</p>
+        <span class="tag">扩展</span>
+      </a>
+      <a class="module-card" href="module-providers.html">
+        <h4>🔌 Provider 集成模式</h4>
+        <p>33+ Provider 的架构模式、Chat Model 实现、向量存储对接</p>
+        <span class="tag">生态</span>
+      </a>
+    </div>
+  </section>
+
+  <section id="summary">
+    <h2>8. 学习要点总结</h2>
+    <table>
+      <tr><th>🏗️ 架构能力</th><th>学习价值</th></tr>
+      <tr><td>Runnable 接口设计</td><td>理解"一切皆可编排"——3000+ 行基类如何支撑整个生态</td></tr>
+      <tr><td>Monorepo + 33 Provider</td><td>大规模多包项目的依赖管理和目录组织</td></tr>
+      <tr><td>Agent Middleware 系统</td><td>洋葱模型在 AI Agent 中的应用——beforeModel/afterModel hook</td></tr>
+      <tr><td>Messages 类型系统</td><td>类型化消息 + ContentBlock 的多模态支持</td></tr>
+      <tr><td>回调与追踪</td><td>LangSmith 集成的底层机制——callback dispatch</td></tr>
+      <tr><td>跨环境兼容</td><td>Node.js / Browser / Cloudflare Workers / Deno 的条件编译</td></tr>
+    </table>
+
+    <div class="arch-highlight">
+      <h4>💡 一句话总结</h4>
+      <p style="margin:8px 0 0;color:var(--color-text-secondary)">LangChain.js 的精髓在于 <strong>Runnable 接口</strong>——它用一个抽象统一了模型调用、工具执行、链式编排和 Agent 决策，使得整个生态系统可以像搭积木一样自由组合。</p>
+    </div>
+
+    <div class="page-nav">
+      <span class="text-muted">← 总览页</span>
+      <a href="module-core.html">Core 核心抽象 →</a>
+    </div>
+  </section>
+
+</main>
+</div>
+<script>
+(function(){
+  if(window.innerWidth>1024)return;
+  var s=document.getElementById('sidebar'),b=document.createElement('div');
+  b.className='sidebar-backdrop';b.onclick=function(){s.classList.remove('open');b.classList.remove('open')};document.body.appendChild(b);
+  var btn=document.createElement('button');btn.textContent='☰ 目录';
+  btn.style.cssText='position:fixed;bottom:20px;right:20px;z-index:200;padding:10px 16px;border-radius:24px;border:none;background:var(--color-primary);color:#fff;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.2)';
+  btn.onclick=function(){s.classList.toggle('open');b.classList.toggle('open')};document.body.appendChild(btn);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,68 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Core 核心抽象 · LangChain.js 深度解构</title><link rel="stylesheet" href="style.css"><script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script><script>mermaid.initialize({startOnLoad:true,theme:'default'})</script></head><body><div class="layout"><aside class="sidebar" id="sidebar"><div class="sidebar-header">LangChain.js 解构</div><div class="sidebar-title"><a href="index.html">← LangChain.js</a></div><ul class="sidebar-nav"><li><a href="#overview">模块概览</a></li><li><a href="#runnable">Runnable 接口</a></li><li><a href="#messages">Messages 系统</a></li><li><a href="#llm">Language Models</a></li><li><a href="#callbacks">Callbacks 回调</a></li><li><a href="#prompts">Prompts / Output Parsers</a></li><li><a href="#contrast">如果我来写</a></li></ul></aside><main class="main"><div class="page-header"><h1>🧬 Core 核心抽象</h1><p class="subtitle"><code>@langchain/core</code> — Runnable / Messages / Language Models / Callbacks / Prompts。整个 LangChain 生态的基石。</p><div class="badges"><span class="badge badge-primary">核心包</span><span class="badge">v1.1.48</span><span class="badge badge-accent">~30 模块</span></div></div>
+
+<section id="runnable"><h2>1. Runnable — 一切皆可编排</h2>
+<p><code>Runnable</code> 是 LangChain.js 最核心的抽象。它是一个泛型基类（<code>base.ts</code> 共 3542 行），定义了三个核心方法：</p>
+<table><tr><th>方法</th><th>签名</th><th>用途</th></tr><tr><td><code>invoke</code></td><td><code>(input) → Promise&lt;output&gt;</code></td><td>单次调用</td></tr><tr><td><code>stream</code></td><td><code>(input) → AsyncIterable</code></td><td>流式输出</td></tr><tr><td><code>batch</code></td><td><code>(inputs[]) → Promise&lt;outputs[]&gt;</code></td><td>批量调用</td></tr></table>
+
+<p><strong>编排原语</strong>（所有方法返回新的 Runnable，支持链式调用）：</p>
+<ul><li><code>.pipe(next)</code> — 管道组合：<code>a.pipe(b).pipe(c)</code></li><li><code>.bind(config)</code> — 绑定配置参数</li><li><code>.withRetry(n)</code> — 自动重试</li><li><code>.withFallbacks([...])</code> — 降级策略</li><li><code>.map()</code> — 对输入的每个元素并行执行</li><li><code>.withListeners({...})</code> — 生命周期回调</li></ul>
+
+<div class="code-ref"><div class="code-ref__header"><span class="code-ref__path">libs/langchain-core/src/runnables/base.ts:124-148</span><a class="code-ref__link" href="vscode://file/Users/chenzedong/Desktop/zedong/langchainjs/libs/langchain-core/src/runnables/base.ts:124:0">IDE 打开</a></div><pre><code><span class="cm">// ★ Runnable 基类——所有组件的公共祖先</span>
+<span class="kw">export abstract class</span> <span class="type">Runnable</span>&lt;RunInput, RunOutput, CallOptions&gt;
+  <span class="kw">extends</span> <span class="type">Serializable</span>
+  <span class="kw">implements</span> RunnableInterface
+{
+  <span class="kw">protected</span> lc_runnable = <span class="kw">true</span>   <span class="cm">// ★ 身份标记：用于运行时类型检查</span>
+  name?: <span class="kw">string</span>
+
+  <span class="kw">abstract</span> invoke(
+    input: RunInput,
+    options?: Partial&lt;CallOptions&gt;
+  ): Promise&lt;RunOutput&gt;
+}</code></pre></div>
+
+<div class="callout callout-insight"><div class="callout-title">🧠 Runnable 中的懒执行设计</div><p><code>a.pipe(b)</code> 并不立即执行 b——它只是返回一个新的 Runnable。这个 <code>RunnableSequence</code> 在 <code>invoke</code> 被调用时才按序执行每个步骤。这种<strong>惰性求值</strong>（lazy evaluation）让 runnable 图可以被先构建再执行，支持图可视化和中间插入。</p></div></section>
+
+<section id="messages"><h2>2. Messages 系统</h2>
+<p>Messages 是 LLM 对话的原子单位。每种消息类型都是不可变的（immutable），并自带序列化能力：</p>
+<table><tr><th>类</th><th>role</th><th>用途</th></tr><tr><td><code>HumanMessage</code></td><td>human</td><td>用户输入</td></tr><tr><td><code>AIMessage</code></td><td>ai</td><td>模型回复（含 tool_calls）</td></tr><tr><td><code>SystemMessage</code></td><td>system</td><td>系统提示</td></tr><tr><td><code>ToolMessage</code></td><td>tool</td><td>工具执行结果</td></tr><tr><td><code>AIMessageChunk</code></td><td>ai</td><td>流式输出的增量块</td></tr></table>
+
+<div class="code-ref"><div class="code-ref__header"><span class="code-ref__path">libs/langchain-core/src/messages/base.ts:52</span></div><pre><code><span class="cm">// ★ 消息内容支持多模态（文本 + ContentBlock 数组）</span>
+<span class="kw">export type</span> MessageContent = <span class="kw">string</span> | Array&lt;ContentBlock&gt;
+
+<span class="cm">// ContentBlock 是联合类型：文本块 | 图片块 | 工具调用块 | ...</span>
+<span class="kw">export type</span> ContentBlock = TextContentBlock | ImageContentBlock
+  | ToolCallContentBlock | AudioContentBlock | ...</code></pre></div>
+
+<p>Messages 模块包含 <code>block_translators</code> 子包——负责在不同提供商格式之间转换内容块（OpenAI ↔ Anthropic ↔ 内部格式）。</p></section>
+
+<section id="llm"><h2>3. Language Models</h2>
+<p>模型抽象分两层：<code>BaseChatModel</code>（聊天模型）和 <code>BaseLLM</code>（纯文本模型）。<code>BaseChatModel</code> 自身就是一个 Runnable——输入 Messages，输出 AIMessage。</p>
+
+<pre class="mermaid">graph TB
+    B["BaseLanguageModel<br/>(base.ts)"]
+    BC["BaseChatModel<br/>(chat_models.ts, 1258行)"]
+    BL["BaseLLM<br/>(llms.ts)"]
+
+    B --> BC
+    B --> BL
+    BC --> OAI["ChatOpenAI"]
+    BC --> ANT["ChatAnthropic"]
+    BC --> GEM["ChatGoogleGenerativeAI"]
+    BC --> UC["UniversalChatModel"]
+
+    style BC fill:#059669,color:#fff
+</pre>
+<p class="mermaid-caption">图：模型继承体系 — BaseChatModel 是所有聊天模型 Provider 的基类</p></section>
+
+<section id="callbacks"><h2>4. Callbacks 回调系统</h2>
+<p>回调系统是 LangSmith 可观测性的基础。它通过 <code>CallbackManager</code> 分发事件到多个 handler：</p>
+<ul><li><code>handleLLMStart / handleLLMEnd</code> — 模型调用生命周期</li><li><code>handleChainStart / handleChainEnd</code> — Chain 执行生命周期</li><li><code>handleToolStart / handleToolEnd</code> — 工具调用生命周期</li><li>通过 <code>AsyncLocalStorage</code> 在异步上下文中传递回调</li></ul></section>
+
+<section id="contrast"><h2>5. "如果我来写" 对比思考</h2>
+
+<div class="callout callout-insight"><div class="callout-title">🧠 问题：如何保证类型安全的同时保持灵活性？</div><p><strong>直觉方案</strong>：为每个 Runnable 组合写死类型参数。</p><p><strong>LangChain 的做法</strong>：使用泛型 + 条件类型。例如 <code>Runnable.bind()</code> 返回的 Runnable 类型会根据绑定参数动态计算输入输出类型。</p><p><strong>差异分析</strong>：TypeScript 的条件类型让 Runnable 的类型在编译时完全确定——一条 <code>prompt.pipe(model).pipe(parser)</code> 链的类型是自动推导的，无需手动标注。</p></div>
+
+<div class="callout callout-insight"><div class="callout-title">🧠 问题：如何支持跨运行时的异步上下文传递？</div><p><strong>直觉方案</strong>：全局变量或 Thread-local storage。</p><p><strong>LangChain 的做法</strong>：使用 <code>AsyncLocalStorage</code>（Node.js） + 浏览器环境的 polyfill，通过 <code>AsyncLocalStorageProviderSingleton</code> 统一接口。</p><p><strong>差异分析</strong>：这是 LangChain 支持 Cloudflare Workers / Deno / Bun 等非 Node 运行时的关键基础设施。</p></div></section>
+
+<div class="page-nav"><a href="index.html">← 返回总览</a><a href="module-langchain.html">Agent & Middleware →</a></div></main></div><script>(function(){if(window.innerWidth>1024)return;var s=document.getElementById('sidebar'),b=document.createElement('div');b.className='sidebar-backdrop';b.onclick=function(){s.classList.remove('open');b.classList.remove('open')};document.body.appendChild(b);var btn=document.createElement('button');btn.textContent='☰ 目录';btn.style.cssText='position:fixed;bottom:20px;right:20px;z-index:200;padding:10px 16px;border-radius:24px;border:none;background:var(--color-primary);color:#fff;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.2)';btn.onclick=function(){s.classList.toggle('open');b.classList.toggle('open')};document.body.appendChild(btn)})()</script></body></html>

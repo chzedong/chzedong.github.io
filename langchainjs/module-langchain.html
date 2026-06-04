@@ -1,0 +1,35 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Agent & Middleware · LangChain.js 深度解构</title><link rel="stylesheet" href="style.css"><script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script><script>mermaid.initialize({startOnLoad:true,theme:'default'})</script></head><body><div class="layout"><aside class="sidebar" id="sidebar"><div class="sidebar-header">LangChain.js 解构</div><div class="sidebar-title"><a href="index.html">← LangChain.js</a></div><ul class="sidebar-nav"><li><a href="#overview">模块概览</a></li><li><a href="#agent">Agent 执行引擎</a></li><li><a href="#middleware">Middleware 中间件</a></li><li><a href="#hub">LangChain Hub</a></li><li><a href="#universal">UniversalChatModel</a></li><li><a href="#contrast">如果我来写</a></li></ul></aside><main class="main"><div class="page-header"><h1>🤖 Agent &amp; Middleware</h1><p class="subtitle"><code>langchain</code> 主包 — Agent 执行引擎、中间件系统、Human-in-the-loop、LangChain Hub。</p><div class="badges"><span class="badge badge-primary">主包</span><span class="badge">v1.4.4</span><span class="badge badge-accent">Agent-first</span></div></div>
+
+<section id="overview"><h2>1. 模块定位</h2><p>如果说 <code>@langchain/core</code> 提供了积木（Runnable、Message、Tool），那么 <code>langchain</code> 主包就是<strong>把积木搭成房子的说明书</strong>。它提供了开箱即用的 Agent、Middleware 系统和 LangChain Hub 集成。</p></section>
+
+<section id="agent"><h2>2. Agent 执行引擎</h2>
+<p>Agent 是一个封装了"模型 → 工具调用 → 观察结果 → 继续推理"循环的 Runnable。核心流程：</p>
+<pre class="mermaid">flowchart TD
+    A["创建 Agent"] --> B["调用 model.invoke(messages)"]
+    B --> C{有 tool_calls?}
+    C -->|是| D["执行工具"]
+    D --> E["追加 ToolMessage"]
+    E --> B
+    C -->|否| F["返回最终 AIMessage"]
+</pre>
+<p class="mermaid-caption">图：Agent ReAct 循环 — 模型推理与工具执行交替进行</p></section>
+
+<section id="middleware"><h2>3. Middleware 中间件系统</h2>
+<p>Middleware 是 LangChain.js Agent 的<strong>洋葱模型钩子系统</strong>——每个中间件可以在 Agent 生命周期的关键节点插入逻辑。中间件通过 hook 方法与 Agent 交互：</p>
+<table><tr><th>中间件</th><th>文件</th><th>功能</th></tr><tr><td><code>contextEditing</code></td><td>contextEditing.ts</td><td>在模型调用前修改消息上下文（裁剪/注入）</td></tr><tr><td><code>dynamicSystemPrompt</code></td><td>dynamicSystemPrompt.ts</td><td>根据运行时状态动态生成系统提示</td></tr><tr><td><code>hitl</code></td><td>hitl.ts</td><td>Human-in-the-loop：工具调用前请求人工审批</td></tr><tr><td><code>llmToolSelector</code></td><td>llmToolSelector.ts</td><td>用 LLM 筛选相关工具（减少 token 消耗）</td></tr><tr><td><code>modelCallLimit</code></td><td>modelCallLimit.ts</td><td>限制最大模型调用次数</td></tr><tr><td><code>modelFallback</code></td><td>modelFallback.ts</td><td>模型调用失败时切换到备用模型</td></tr><tr><td><code>modelRetry</code></td><td>modelRetry.ts</td><td>自动重试失败调用（指数退避）</td></tr></table>
+
+<div class="callout callout-insight"><div class="callout-title">🧠 Middleware 设计的巧妙之处</div><p>Middleware 不是在 Agent 外部包装——它们是<strong>注入到 Agent 内部</strong>的钩子。每个中间件实现 <code>beforeModel</code> / <code>afterModel</code> / <code>beforeTool</code> / <code>afterTool</code> 等 hook，Agent 在执行循环的对应阶段依次调用它们。这使得 <strong>Agent 的行为可以被第三方库扩展</strong>，而无需修改 Agent 自身源码。</p></div></section>
+
+<section id="hub"><h2>4. LangChain Hub</h2>
+<p>LangChain Hub 是社区共享的 Prompt 仓库。通过 <code>langchain/hub</code> 导出的 <code>pull()</code> 函数，可以一行代码拉取社区发布的 Prompt 模板：</p>
+<pre><code><span class="kw">import</span> { pull } <span class="kw">from</span> <span class="str">"langchain/hub"</span>
+<span class="kw">const</span> prompt = <span class="kw">await</span> <span class="fn">pull</span>(<span class="str">"hwchase17/react"</span>)</code></pre></section>
+
+<section id="universal"><h2>5. UniversalChatModel</h2>
+<p><code>langchain/chat_models/universal</code> 提供了一种<strong>统一模型接口</strong>——开发者可以通过一个标准 API 调用任意 Provider 的模型，而不需要分别导入各个 Provider 包。底层通过动态加载 + Provider 注册机制实现。</p></section>
+
+<section id="contrast"><h2>6. "如果我来写" 对比思考</h2>
+
+<div class="callout callout-insight"><div class="callout-title">🧠 问题：如何让 Agent 的行为可扩展？</div><p><strong>直觉方案</strong>：在 Agent 类中提供大量配置选项（布尔标志）。</p><p><strong>LangChain 的做法</strong>：Middleware 系统。Agent 在执行循环中依次调用所有注册中间件的 hook——这本质上是<strong>责任链模式</strong>。</p><p><strong>差异分析</strong>：配置标志会爆炸（modelCallLimit、modelRetry、contextEditing、hitl...每个都需要一个 flag）。Middleware 让每个行为变化成为一个独立的类，Agent 本身保持简洁，扩展性由组合提供。</p></div></section>
+
+<div class="page-nav"><a href="module-core.html">← Core 核心抽象</a><a href="module-tools.html">Tools & MCP →</a></div></main></div><script>(function(){if(window.innerWidth>1024)return;var s=document.getElementById('sidebar'),b=document.createElement('div');b.className='sidebar-backdrop';b.onclick=function(){s.classList.remove('open');b.classList.remove('open')};document.body.appendChild(b);var btn=document.createElement('button');btn.textContent='☰ 目录';btn.style.cssText='position:fixed;bottom:20px;right:20px;z-index:200;padding:10px 16px;border-radius:24px;border:none;background:var(--color-primary);color:#fff;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.2)';btn.onclick=function(){s.classList.toggle('open');b.classList.toggle('open')};document.body.appendChild(btn)})()</script></body></html>

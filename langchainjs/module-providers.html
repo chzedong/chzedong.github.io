@@ -1,0 +1,31 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Provider 集成模式 · LangChain.js 深度解构</title><link rel="stylesheet" href="style.css"></head><body><div class="layout"><aside class="sidebar" id="sidebar"><div class="sidebar-header">LangChain.js 解构</div><div class="sidebar-title"><a href="index.html">← LangChain.js</a></div><ul class="sidebar-nav"><li><a href="#overview">模块概览</a></li><li><a href="#pattern">集成模式</a></li><li><a href="#chat-model">Chat Model 实现</a></li><li><a href="#vectorstore">向量存储对接</a></li><li><a href="#contract">契约设计</a></li></ul></aside><main class="main"><div class="page-header"><h1>🔌 Provider 集成模式</h1><p class="subtitle">33+ Provider 的架构模式 — Chat Model 实现、向量存储对接、工具集成。</p><div class="badges"><span class="badge badge-primary">生态</span><span class="badge">33+ Provider</span><span class="badge badge-accent">多模态</span></div></div>
+
+<section id="overview"><h2>1. 模块定位</h2><p>LangChain.js 的 Provider 生态是其最大优势之一。33 个 provider 包涵盖了<strong>聊天模型、嵌入模型、向量存储、工具</strong>四大类别。所有 Provider 通过实现相同的基类接口来保证互操作性。</p></section>
+
+<section id="pattern"><h2>2. 集成模式</h2>
+<p>每个 Provider 包遵循统一的结构：</p>
+<pre><code>libs/providers/langchain-{name}/
+├── package.json        <span class="cm">// export map: chat_models / embeddings / vectorstores / ...</span>
+├── src/
+│   ├── chat_models.ts  <span class="cm">// extends BaseChatModel</span>
+│   ├── embeddings.ts   <span class="cm">// extends Embeddings</span>
+│   ├── vectorstores.ts  <span class="cm">// extends VectorStore (如适用)</span>
+│   ├── tests/
+│   │   ├── {name}.test.ts        <span class="cm">// 单元测试</span>
+│   │   └── {name}.int.test.ts    <span class="cm">// 集成测试（需 API key）</span>
+│   └── index.ts
+└── tsdown.config.ts</code></pre></section>
+
+<section id="chat-model"><h2>3. Chat Model 实现</h2>
+<p>所有聊天模型 Provider 都继承自 <code>BaseChatModel</code>，只需实现少数抽象方法：</p>
+<ul><li><code>_generate(messages, options, runManager)</code> — 核心调用逻辑</li><li><code>_streamResponseChunks(messages, options, runManager)</code> — 流式输出</li><li>Provider 特有的参数（temperature、top_p 等）作为构造函数参数传入</li></ul>
+<div class="callout callout-tip"><div class="callout-title">💡 关键设计</div><p>LangChain 使用 <code>lc_serializable</code> / <code>lc_namespace</code> 等命名空间属性实现<strong>可序列化性</strong>——任何 ChatModel 实例都可以被序列化为 JSON 并在另一个运行时中反序列化恢复。这是 LangSmith 追踪和 LangServe 部署的基础。</p></div></section>
+
+<section id="vectorstore"><h2>4. 向量存储对接</h2>
+<p>向量存储 Provider（Pinecone、Qdrant、Weaviate、MongoDB Atlas、Redis、Neo4j 等）实现 <code>VectorStore</code> 抽象：</p>
+<ul><li><code>addDocuments(docs)</code> — 存储文档向量</li><li><code>similaritySearch(query, k)</code> — 相似性搜索</li><li><code>asRetriever()</code> — 转换为 Runnable <code>Retriever</code></li></ul></section>
+
+<section id="contract"><h2>5. 契约设计</h2>
+<table><tr><th>抽象类</th><th>Provider 需实现</th><th>示例 Provider</th></tr><tr><td><code>BaseChatModel</code></td><td><code>_generate + _streamResponseChunks</code></td><td>OpenAI, Anthropic, Gemini, DeepSeek</td></tr><tr><td><code>Embeddings</code></td><td><code>embedDocuments + embedQuery</code></td><td>OpenAI, Cohere, Google, Ollama</td></tr><tr><td><code>VectorStore</code></td><td><code>addVectors + similaritySearchVectorWithScore</code></td><td>Pinecone, Qdrant, Weaviate, PGVector</td></tr><tr><td><code>BaseTool</code></td><td><code>name + schema + _call</code></td><td>Tavily, Exa, Neo4j, MCP Adapters</td></tr></table>
+
+<div class="page-nav"><a href="module-tools.html">← Tools & MCP</a><a href="index.html">返回总览 →</a></div></main></div><script>(function(){if(window.innerWidth>1024)return;var s=document.getElementById('sidebar'),b=document.createElement('div');b.className='sidebar-backdrop';b.onclick=function(){s.classList.remove('open');b.classList.remove('open')};document.body.appendChild(b);var btn=document.createElement('button');btn.textContent='☰ 目录';btn.style.cssText='position:fixed;bottom:20px;right:20px;z-index:200;padding:10px 16px;border-radius:24px;border:none;background:var(--color-primary);color:#fff;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.2)';btn.onclick=function(){s.classList.toggle('open');b.classList.toggle('open')};document.body.appendChild(btn)})()</script></body></html>
