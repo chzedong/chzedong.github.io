@@ -37,6 +37,23 @@ function extractTitle(htmlPath) {
   return path.basename(path.dirname(htmlPath));
 }
 
+// ── 提取 tech-type ───────────────────────────────
+function extractTechType(htmlPath) {
+  const html = fs.readFileSync(htmlPath, 'utf-8');
+  const match = html.match(/<meta[^>]+name=["']tech-type["'][^>]+content=["']([^"']+)["']/i)
+    || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']tech-type["']/i);
+  if (match) return match[1].trim();
+  return 'library';
+}
+
+const TYPE_LABELS = {
+  library: 'Library',
+  framework: 'Framework',
+  concept: 'Concept',
+  paradigm: 'Paradigm',
+  protocol: 'Protocol',
+};
+
 // ── 扫描项目目录 ─────────────────────────────────
 function scanProjects() {
   const entries = fs.readdirSync(ROOT, { withFileTypes: true });
@@ -50,9 +67,10 @@ function scanProjects() {
     if (!fs.existsSync(indexPath)) continue;
 
     const title = extractTitle(indexPath);
+    const techType = extractTechType(indexPath);
     const { icon, css } = getIconInfo(entry.name);
 
-    projects.push({ dir: entry.name, title, icon, css });
+    projects.push({ dir: entry.name, title, icon, css, techType });
   }
 
   projects.sort((a, b) => a.dir.localeCompare(b.dir));
@@ -69,11 +87,12 @@ function generateNavHtml(projects) {
 
   let html = '<div class="nav-grid">\n';
   for (const p of projects) {
+    const typeLabel = TYPE_LABELS[p.techType] || 'Tech';
     html += `  <a href="./${p.dir}/" class="nav-card">\n`;
     html += `    <div class="nav-icon ${p.css}"><i class="${p.icon}"></i></div>\n`;
     html += `    <div class="nav-text">\n`;
     html += `      <h3>${escapeHtml(p.title)}</h3>\n`;
-    html += `      <span>${escapeHtml(p.dir)}/</span>\n`;
+    html += `      <span>${escapeHtml(p.dir)}/ · ${escapeHtml(typeLabel)}</span>\n`;
     html += `    </div>\n`;
     html += `  </a>\n`;
   }
