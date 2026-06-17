@@ -1,0 +1,1331 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="tech-type" content="concept">
+  <title>浏览器 GC 友好指南 — 写法、架构与内存陷阱</title>
+  <style>
+    /* ========================================
+       Deconstruct Tech — 技术对象解构文档样式
+       版本: 2.0.0
+       ======================================== */
+    /* ----- CSS Variables ----- */
+    :root {
+      --color-bg: #ffffff;
+      --color-bg-secondary: #f8f9fa;
+      --color-bg-tertiary: #f1f3f5;
+      --color-text: #1a1a2e;
+      --color-text-secondary: #495057;
+      --color-text-muted: #868e96;
+      --color-border: #dee2e6;
+      --color-border-light: #e9ecef;
+      --color-primary: #2563eb;
+      --color-primary-light: #eff6ff;
+      --color-primary-dark: #1d4ed8;
+      --color-accent: #7c3aed;
+      --color-accent-light: #f5f3ff;
+      --color-success: #059669;
+      --color-success-bg: #ecfdf5;
+      --color-warning: #d97706;
+      --color-warning-bg: #fffbeb;
+      --color-danger: #dc2626;
+      --color-danger-bg: #fef2f2;
+      --color-info: #0891b2;
+      --color-info-bg: #ecfeff;
+      --color-code-bg: #f1f5f9;
+      --color-code-text: #1e293b;
+      --color-inline-code-bg: #f1f5f9;
+      --color-inline-code-text: #e11d48;
+      --sidebar-width: 260px;
+      --header-height: 60px;
+      --max-content-width: 860px;
+      --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
+      --font-mono: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", "Consolas", "Courier New", monospace;
+      --radius: 8px;
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+      --transition: 150ms ease;
+    }
+
+    /* ----- Dark Mode ----- */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --color-bg: #0f172a;
+        --color-bg-secondary: #1e293b;
+        --color-bg-tertiary: #334155;
+        --color-text: #e2e8f0;
+        --color-text-secondary: #94a3b8;
+        --color-text-muted: #64748b;
+        --color-border: #334155;
+        --color-border-light: #1e293b;
+        --color-primary: #3b82f6;
+        --color-primary-light: #1e3a5f;
+        --color-primary-dark: #60a5fa;
+        --color-accent: #8b5cf6;
+        --color-accent-light: #2e1065;
+        --color-success: #10b981;
+        --color-success-bg: #064e3b;
+        --color-warning: #f59e0b;
+        --color-warning-bg: #451a03;
+        --color-danger: #f87171;
+        --color-danger-bg: #450a0a;
+        --color-info: #22d3ee;
+        --color-info-bg: #083344;
+        --color-code-bg: #1e293b;
+        --color-code-text: #e2e8f0;
+        --color-inline-code-bg: #334155;
+        --color-inline-code-text: #f87171;
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+      }
+    }
+
+    /* ----- Reset & Base ----- */
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      scroll-padding-top: calc(var(--header-height) + 20px);
+    }
+
+    body {
+      font-family: var(--font-sans);
+      font-size: 15px;
+      line-height: 1.7;
+      color: var(--color-text);
+      background: var(--color-bg);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* ----- Layout ----- */
+    .layout {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* ----- Sidebar ----- */
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: var(--sidebar-width);
+      height: 100vh;
+      background: var(--color-bg-secondary);
+      border-right: 1px solid var(--color-border);
+      overflow-y: auto;
+      padding: 24px 20px;
+      z-index: 100;
+      transition: transform var(--transition);
+    }
+
+    .sidebar-header {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--color-text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .sidebar-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--color-text);
+      margin-bottom: 20px;
+      line-height: 1.3;
+    }
+
+    .sidebar-title a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .sidebar-nav {
+      list-style: none;
+    }
+
+    .sidebar-nav li {
+      margin-bottom: 2px;
+    }
+
+    .sidebar-nav a {
+      display: block;
+      padding: 6px 12px;
+      border-radius: 6px;
+      color: var(--color-text-secondary);
+      text-decoration: none;
+      font-size: 14px;
+      transition: all var(--transition);
+    }
+
+    .sidebar-nav a:hover {
+      background: var(--color-bg-tertiary);
+      color: var(--color-text);
+    }
+
+    .sidebar-nav a.active {
+      background: var(--color-primary-light);
+      color: var(--color-primary);
+      font-weight: 600;
+    }
+
+    .sidebar-nav .sub-nav {
+      padding-left: 16px;
+    }
+
+    .sidebar-nav .sub-nav a {
+      font-size: 13px;
+    }
+
+    /* ----- Main Content ----- */
+    .main {
+      margin-left: var(--sidebar-width);
+      flex: 1;
+      max-width: var(--max-content-width);
+      padding: 48px 56px 80px;
+    }
+
+    /* ----- Sidebar Backdrop (mobile overlay) ----- */
+    .sidebar-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.35);
+      z-index: 99;
+      opacity: 0;
+      transition: opacity 200ms ease;
+      pointer-events: none;
+    }
+
+    .sidebar-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* ----- Header ----- */
+    .page-header {
+      margin-bottom: 40px;
+      padding-bottom: 32px;
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .page-header h1 {
+      font-size: 32px;
+      font-weight: 800;
+      line-height: 1.2;
+      color: var(--color-text);
+      margin-bottom: 12px;
+      letter-spacing: -0.02em;
+    }
+
+    .page-header .subtitle {
+      font-size: 17px;
+      color: var(--color-text-secondary);
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+
+    .badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+      background: var(--color-bg-tertiary);
+      color: var(--color-text-secondary);
+    }
+
+    .badge-primary {
+      background: var(--color-primary-light);
+      color: var(--color-primary);
+    }
+
+    .badge-accent {
+      background: var(--color-accent-light);
+      color: var(--color-accent);
+    }
+
+    .badge-success {
+      background: var(--color-success-bg);
+      color: var(--color-success);
+    }
+
+    /* ----- Level Tabs ----- */
+    .level-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .level-tab {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--color-text-secondary);
+      background: var(--color-bg-secondary);
+      border: 1px solid var(--color-border);
+      text-decoration: none;
+      transition: all var(--transition);
+    }
+
+    .level-tab:hover {
+      background: var(--color-bg-tertiary);
+      color: var(--color-text);
+      text-decoration: none;
+    }
+
+    .level-tab.active {
+      background: var(--color-primary);
+      color: #fff;
+      border-color: var(--color-primary);
+    }
+
+    /* ----- Mental Model Box ----- */
+    .mental-model {
+      padding: 20px 24px;
+      border-radius: var(--radius);
+      background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-accent-light) 100%);
+      border-left: 4px solid var(--color-primary);
+      margin-bottom: 24px;
+    }
+
+    .mental-model h4 {
+      margin-top: 0;
+      margin-bottom: 8px;
+      color: var(--color-primary);
+      font-size: 16px;
+    }
+
+    .mental-model p {
+      margin-bottom: 0;
+      color: var(--color-text-secondary);
+      font-size: 15px;
+    }
+
+    /* ----- Decision Box ----- */
+    .decision-box {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .decision-box__section {
+      padding: 18px 20px;
+      border-radius: var(--radius);
+      border: 1px solid var(--color-border);
+    }
+
+    .decision-box__section h4 {
+      margin-top: 0;
+      margin-bottom: 12px;
+      font-size: 15px;
+    }
+
+    .decision-box__section ul {
+      margin-bottom: 0;
+      padding-left: 18px;
+      color: var(--color-text-secondary);
+      font-size: 14px;
+    }
+
+    .decision-box__section li {
+      margin-bottom: 6px;
+    }
+
+    .decision-box__yes {
+      background: var(--color-success-bg);
+      border-color: var(--color-success);
+    }
+
+    .decision-box__yes h4 {
+      color: var(--color-success);
+    }
+
+    .decision-box__no {
+      background: var(--color-danger-bg);
+      border-color: var(--color-danger);
+    }
+
+    .decision-box__no h4 {
+      color: var(--color-danger);
+    }
+
+    /* ----- Glossary ----- */
+    .glossary {
+      margin-bottom: 20px;
+    }
+
+    .glossary dt {
+      font-weight: 600;
+      color: var(--color-text);
+      margin-top: 14px;
+      font-size: 15px;
+    }
+
+    .glossary dt:first-child {
+      margin-top: 0;
+    }
+
+    .glossary dd {
+      margin-left: 0;
+      color: var(--color-text-secondary);
+      font-size: 14px;
+      margin-top: 4px;
+    }
+
+    /* ----- Level Badge ----- */
+    .level-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+
+    .level-badge-l1 { background: var(--color-bg-tertiary); color: var(--color-text-muted); }
+    .level-badge-l2 { background: var(--color-success-bg); color: var(--color-success); }
+    .level-badge-l3 { background: var(--color-warning-bg); color: var(--color-warning); }
+    .level-badge-l4 { background: var(--color-accent-light); color: var(--color-accent); }
+
+    /* ----- Sections ----- */
+    section {
+      margin-bottom: 48px;
+    }
+
+    section h2 {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--color-text);
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--color-border-light);
+      letter-spacing: -0.01em;
+    }
+
+    section h3 {
+      font-size: 19px;
+      font-weight: 600;
+      color: var(--color-text);
+      margin-top: 28px;
+      margin-bottom: 12px;
+    }
+
+    section h4 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--color-text-secondary);
+      margin-top: 20px;
+      margin-bottom: 8px;
+    }
+
+    section p {
+      margin-bottom: 14px;
+      color: var(--color-text-secondary);
+    }
+
+    section ul,
+    section ol {
+      margin-bottom: 14px;
+      padding-left: 24px;
+      color: var(--color-text-secondary);
+    }
+
+    section li {
+      margin-bottom: 6px;
+    }
+
+    section a {
+      color: var(--color-primary);
+      text-decoration: none;
+    }
+
+    section a:hover {
+      text-decoration: underline;
+    }
+
+    /* ----- Code Reference Block ----- */
+    .code-ref {
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      margin-bottom: 20px;
+      overflow: hidden;
+      max-width: 100%;
+    }
+
+    .code-ref__header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 16px;
+      background: var(--color-bg-tertiary);
+      border-bottom: 1px solid var(--color-border-light);
+      font-size: 12px;
+    }
+
+    .code-ref__path {
+      font-family: var(--font-mono);
+      color: var(--color-text-muted);
+      font-weight: 500;
+    }
+
+    .code-ref__link {
+      color: var(--color-primary);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 12px;
+    }
+
+    .code-ref__link:hover {
+      text-decoration: underline;
+    }
+
+    .code-ref pre {
+      margin: 0;
+      border: none;
+      border-radius: 0;
+      max-width: 100%;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .code-ref__notes {
+      padding: 10px 16px;
+      background: var(--color-info-bg);
+      border-top: 1px solid var(--color-border-light);
+      font-size: 13px;
+      color: var(--color-text-secondary);
+    }
+
+    /* ----- Learning Path Steps ----- */
+    .reading-path {
+      list-style: none;
+      padding: 0;
+      margin-bottom: 20px;
+    }
+
+    .reading-path li {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      padding: 10px 14px;
+      margin-bottom: 4px;
+      border-radius: 6px;
+      background: var(--color-bg-secondary);
+      font-size: 14px;
+    }
+
+    .reading-path .step-num {
+      flex-shrink: 0;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--color-primary);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .reading-path .step-file {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      color: var(--color-text);
+      min-width: 160px;
+    }
+
+    .reading-path .step-desc {
+      color: var(--color-text-secondary);
+    }
+
+    /* ----- Architecture Highlight Box ----- */
+    .arch-highlight {
+      padding: 20px 24px;
+      border-radius: var(--radius);
+      background: var(--color-accent-light);
+      border-left: 4px solid var(--color-accent);
+      margin-bottom: 20px;
+    }
+
+    .arch-highlight h4 {
+      margin-top: 0;
+      color: var(--color-accent);
+    }
+
+    /* ----- Comparison Table ----- */
+    .comparison-table {
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .comparison-table th:first-child,
+    .comparison-table td:first-child {
+      font-weight: 600;
+      color: var(--color-text);
+    }
+
+    .comparison-table th,
+    .comparison-table td {
+      border-right: 1px solid var(--color-border-light);
+    }
+
+    .comparison-table th:last-child,
+    .comparison-table td:last-child {
+      border-right: none;
+    }
+
+    .comparison-table thead th {
+      background: var(--color-bg-tertiary);
+    }
+
+    code {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      background: var(--color-inline-code-bg);
+      color: var(--color-inline-code-text);
+      padding: 2px 6px;
+      border-radius: 4px;
+      overflow-wrap: anywhere;
+    }
+
+    pre {
+      background: var(--color-code-bg);
+      color: var(--color-code-text);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      overflow-x: auto;
+      margin-bottom: 18px;
+      border: 1px solid var(--color-border-light);
+      font-size: 13px;
+      line-height: 1.6;
+      max-width: 100%;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    pre code {
+      background: none;
+      color: inherit;
+      padding: 0;
+      font-size: inherit;
+      overflow-wrap: anywhere;
+    }
+
+    /* Syntax Highlighting (light) */
+    .kw { color: #7c3aed; font-weight: 600; }
+    .str { color: #059669; }
+    .num { color: #d97706; }
+    .cm { color: #868e96; font-style: italic; }
+    .fn { color: #2563eb; }
+    .op { color: #dc2626; }
+    .type { color: #0891b2; }
+
+    @media (prefers-color-scheme: dark) {
+      .kw { color: #a78bfa; }
+      .str { color: #34d399; }
+      .num { color: #fbbf24; }
+      .cm { color: #64748b; }
+      .fn { color: #60a5fa; }
+      .op { color: #f87171; }
+      .type { color: #22d3ee; }
+    }
+
+    /* ----- Callouts ----- */
+    .callout {
+      padding: 16px 20px;
+      border-radius: var(--radius);
+      margin-bottom: 18px;
+      border-left: 4px solid;
+      font-size: 14px;
+    }
+
+    .callout-title {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .callout-info {
+      background: var(--color-info-bg);
+      border-color: var(--color-info);
+    }
+
+    .callout-tip {
+      background: var(--color-success-bg);
+      border-color: var(--color-success);
+    }
+
+    .callout-warning {
+      background: var(--color-warning-bg);
+      border-color: var(--color-warning);
+    }
+
+    .callout-danger {
+      background: var(--color-danger-bg);
+      border-color: var(--color-danger);
+    }
+
+    .callout-insight {
+      background: var(--color-accent-light);
+      border-color: var(--color-accent);
+    }
+
+    /* ----- Tables ----- */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 18px;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--color-border-light);
+    }
+
+    th {
+      font-weight: 600;
+      color: var(--color-text);
+      background: var(--color-bg-secondary);
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    td {
+      color: var(--color-text-secondary);
+    }
+
+    tr:hover td {
+      background: var(--color-bg-secondary);
+    }
+
+    /* ----- Module Cards ----- */
+    .module-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .module-card {
+      padding: 20px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      transition: all var(--transition);
+      text-decoration: none;
+      color: inherit;
+      display: block;
+    }
+
+    .module-card:hover {
+      border-color: var(--color-primary);
+      box-shadow: var(--shadow-md);
+      text-decoration: none;
+    }
+
+    .module-card h4 {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--color-text);
+      margin: 0 0 6px;
+    }
+
+    .module-card p {
+      font-size: 14px;
+      color: var(--color-text-muted);
+      margin: 0;
+    }
+
+    .module-card .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      background: var(--color-primary-light);
+      color: var(--color-primary);
+      margin-top: 8px;
+    }
+
+    /* ----- Page Navigation ----- */
+    .page-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 56px;
+      padding-top: 24px;
+      border-top: 1px solid var(--color-border);
+    }
+
+    .page-nav a {
+      color: var(--color-primary);
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 14px;
+    }
+
+    .page-nav a:hover {
+      text-decoration: underline;
+    }
+
+    .page-nav .back-to-index {
+      color: var(--color-text-muted);
+    }
+
+    /* ----- Mermaid ----- */
+    .mermaid {
+      margin: 20px 0;
+      padding: 20px;
+      background: var(--color-bg-secondary);
+      border-radius: var(--radius);
+      border: 1px solid var(--color-border-light);
+      overflow-x: auto;
+    }
+
+    .mermaid-caption {
+      text-align: center;
+      font-size: 13px;
+      color: var(--color-text-muted);
+      margin-top: -16px;
+      margin-bottom: 20px;
+    }
+
+    .mermaid svg {
+      max-width: 100%;
+      height: auto;
+    }
+
+    /* ----- Directory Tree ----- */
+    .dir-tree {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.8;
+      color: var(--color-text-secondary);
+      background: var(--color-code-bg);
+      padding: 16px 20px;
+      border-radius: var(--radius);
+      margin-bottom: 18px;
+      white-space: pre;
+      overflow-x: auto;
+      border: 1px solid var(--color-border-light);
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+
+    .dir-tree .comment { color: var(--color-text-muted); }
+    .dir-tree .dir { color: var(--color-primary); font-weight: 600; }
+    .dir-tree .file { color: var(--color-text-secondary); }
+    .dir-tree .important { color: var(--color-accent); font-weight: 600; }
+
+    /* ----- Flow Steps ----- */
+    .flow-steps {
+      counter-reset: step;
+      list-style: none;
+      padding: 0;
+      margin-bottom: 20px;
+    }
+
+    .flow-steps li {
+      counter-increment: step;
+      position: relative;
+      padding-left: 40px;
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-left: 2px solid var(--color-border);
+    }
+
+    .flow-steps li:last-child {
+      border-left-color: transparent;
+    }
+
+    .flow-steps li::before {
+      content: counter(step);
+      position: absolute;
+      left: -14px;
+      top: 0;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--color-primary);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ----- Utility ----- */
+    .text-muted { color: var(--color-text-muted); }
+    .text-sm { font-size: 13px; }
+    .mt-0 { margin-top: 0; }
+    .mb-0 { margin-bottom: 0; }
+    .highlight {
+      background: linear-gradient(120deg, var(--color-warning-bg) 0%, var(--color-warning-bg) 100%);
+      padding: 2px 4px;
+      border-radius: 2px;
+    }
+
+    /* ----- Responsive ----- */
+    @media (max-width: 1024px) {
+      .sidebar-backdrop { display: block; }
+      .sidebar {
+        transform: translateX(-100%);
+        box-shadow: var(--shadow-lg);
+      }
+      .sidebar.open { transform: translateX(0); }
+      .main {
+        margin-left: 0;
+        padding: 32px 24px;
+        max-width: 100%;
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .main { padding: 24px 18px; }
+      .page-header h1 { font-size: 26px; }
+      section h2 { font-size: 20px; }
+      section h3 { font-size: 17px; }
+      pre {
+        font-size: 12px;
+        padding: 16px 18px;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      table {
+        font-size: 12px;
+        display: block;
+        overflow-x: auto;
+        max-width: 100%;
+      }
+      th, td { padding: 8px 10px; }
+      .reading-path li {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+      }
+      .reading-path .step-file { min-width: auto; }
+      .dir-tree {
+        font-size: 11px;
+        padding: 12px 14px;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .module-grid { grid-template-columns: 1fr; }
+      .decision-box { grid-template-columns: 1fr; }
+      .level-tabs { gap: 6px; }
+      .level-tab { padding: 5px 10px; font-size: 12px; }
+      .mental-model { padding: 16px 18px; }
+    }
+
+    @media (max-width: 480px) {
+      .main { padding: 16px 12px; }
+      .page-header h1 { font-size: 22px; }
+      section h2 { font-size: 18px; }
+      section h3 { font-size: 16px; }
+      .page-nav {
+        flex-direction: column;
+        gap: 12px;
+        align-items: flex-start;
+      }
+      .sidebar {
+        width: 85vw;
+        max-width: 300px;
+      }
+      .flow-steps li { padding-left: 30px; }
+    }
+
+    /* ----- Print ----- */
+    @media print {
+      .sidebar { display: none; }
+      .main { margin-left: 0; padding: 0; max-width: 100%; }
+      .page-nav { display: none; }
+      pre, .dir-tree { white-space: pre-wrap; word-break: break-all; }
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>mermaid.initialize({ startOnLoad: true, theme: 'default' });</script>
+</head>
+
+<body>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">技术解构</div>
+      <div class="sidebar-title"><a href="index.html">浏览器 GC 友好指南</a></div>
+      <ul class="sidebar-nav">
+        <li><a href="#overview">阅读地图</a></li>
+        <li><a href="#background">背景与问题</a></li>
+        <li><a href="#quickstart">快速上手</a></li>
+        <li><a href="#usage">用法详解</a></li>
+        <li class="sub-nav"><a href="#usage-friendly">GC 友好操作</a></li>
+        <li class="sub-nav"><a href="#usage-unfriendly">GC 不友好操作</a></li>
+        <li class="sub-nav"><a href="#usage-practices">最佳实践</a></li>
+        <li class="sub-nav"><a href="#usage-pitfalls">内存陷阱</a></li>
+        <li><a href="#principle">核心原理</a></li>
+        <li class="sub-nav"><a href="#principle-model">心智模型</a></li>
+        <li class="sub-nav"><a href="#principle-gc">GC 如何工作</a></li>
+        <li class="sub-nav"><a href="#principle-jank">为什么会卡顿</a></li>
+        <li><a href="#architecture">架构友好/不友好</a></li>
+        <li><a href="#comparison">GC vs 手动管理</a></li>
+        <li><a href="#history">历史演进</a></li>
+        <li><a href="#summary">学习要点</a></li>
+      </ul>
+    </aside>
+    <main class="main" id="main-content">
+      <header class="page-header">
+        <h1>浏览器 GC 友好指南</h1>
+        <p class="subtitle">写出内存友好、卡顿更少的 Web 应用：从一行代码的写法到整体架构的选择。</p>
+        <div class="badges">
+          <span class="badge badge-primary">Concept</span>
+          <span class="badge badge-accent">L1-L4</span>
+          <span class="badge">V8 · Memory Leak · Performance</span>
+        </div>
+        <div class="level-tabs">
+          <a href="#overview" class="level-tab">L1 概览</a>
+          <a href="#quickstart" class="level-tab active">L2 用法</a>
+          <a href="#principle" class="level-tab">L3 原理</a>
+          <a href="#architecture" class="level-tab">L4 精通</a>
+        </div>
+      </header>
+
+      <section id="overview">
+        <h2>阅读地图</h2>
+        <p>本文档同时覆盖「用法」与「原理」两条线。你可以根据自己的目标选择阅读深度：</p>
+        <ul class="reading-path">
+          <li><span class="step-num">L1</span><span class="step-file">概览</span><span class="step-desc">5 分钟理解 GC 是什么、为什么会影响性能。</span></li>
+          <li><span class="step-num">L2</span><span class="step-file">用法</span><span class="step-desc">30 分钟掌握日常代码中 GC 友好与不友好的写法。</span></li>
+          <li><span class="step-num">L3</span><span class="step-file">原理</span><span class="step-desc">2 小时理解 V8 分代 GC、标记-清除、增量回收。</span></li>
+          <li><span class="step-num">L4</span><span class="step-file">精通</span><span class="step-desc">能设计内存友好的架构，能诊断和修复内存泄漏。</span></li>
+        </ul>
+        <div class="mental-model">
+          <h4>🧠 心智模型</h4>
+          <p>浏览器的 JavaScript 引擎会自动清理「再也访问不到」的对象，但<strong>清理过程会暂停主线程</strong>。GC 友好的本质是：减少短命对象的创建、避免无意义的长期引用、让垃圾对象在正确的时机被回收。</p>
+        </div>
+      </section>
+
+      <section id="background">
+        <h2>背景与问题 <span class="level-badge level-badge-l1">L1</span></h2>
+        <p>JavaScript 是自动内存管理的语言，开发者不需要手动 <code>malloc/free</code>。这带来便利，也带来隐形成本：当堆内存增长到一定程度，引擎必须停下来回收垃圾，这个停顿可能导致动画掉帧、交互延迟。</p>
+        <p>常见问题：</p>
+        <ul>
+          <li><strong>频繁 GC</strong>：热路径创建大量短命对象，GC 反复触发。</li>
+          <li><strong>长时间 GC</strong>：老年代对象过多，Full GC 停顿明显。</li>
+          <li><strong>内存泄漏</strong>：对象被长期引用，无法释放，最终崩溃或卡顿。</li>
+        </ul>
+      </section>
+
+      <section id="quickstart">
+        <h2>快速上手 <span class="level-badge level-badge-l2">L2</span></h2>
+        <h3>最小可运行示例：对象池</h3>
+        <p>在热路径中复用对象，避免反复创建：</p>
+        <pre><code>const pool = []
+function getParticle() {
+  return pool.pop() || { x: 0, y: 0, vx: 0, vy: 0 }
+}
+function releaseParticle(p) {
+  p.x = p.y = p.vx = p.vy = 0
+  pool.push(p)
+}
+
+// 使用
+const p = getParticle()
+p.x = 100
+// ... 使用完毕
+releaseParticle(p)</code></pre>
+        <h3>常见场景</h3>
+        <ul>
+          <li><strong>游戏/动画</strong>：粒子系统、 bullets、频繁更新的坐标数据。</li>
+          <li><strong>大数据表格</strong>：虚拟滚动 + 对象复用，避免一次性渲染万行 DOM。</li>
+          <li><strong>SPA 路由</strong>：离开页面时取消订阅、释放事件监听。</li>
+        </ul>
+      </section>
+
+      <section id="usage">
+        <h2>用法详解 <span class="level-badge level-badge-l2">L2</span></h2>
+
+        <h3 id="usage-friendly">GC 友好的操作</h3>
+        <table>
+          <tr><th>操作</th><th>说明</th><th>示例</th></tr>
+          <tr>
+            <td>对象复用 / 对象池</td>
+            <td>热路径中重复利用对象，减少分配和 GC 频率</td>
+            <td><code>pool.pop() / pool.push()</code></td>
+          </tr>
+          <tr>
+            <td>使用 WeakMap / WeakSet / WeakRef</td>
+            <td>不阻止垃圾回收的关联数据存储</td>
+            <td><code>new WeakMap()</code></td>
+          </tr>
+          <tr>
+            <td>TypedArray</td>
+            <td>数值数据用连续内存，减少对象头开销</td>
+            <td><code>new Float32Array(1024)</code></td>
+          </tr>
+          <tr>
+            <td>避免闭包捕获大对象</td>
+            <td>闭包会延长被捕获变量的生命周期</td>
+            <td>把大数据作为参数传入，而非闭包变量</td>
+          </tr>
+          <tr>
+            <td>字符串 Builder 模式</td>
+            <td>大量字符串拼接时先存入数组再 join</td>
+            <td><code>parts.join('')</code></td>
+          </tr>
+          <tr>
+            <td>批量 DOM 操作</td>
+            <td>减少布局抖动和临时对象</td>
+            <td>DocumentFragment、requestAnimationFrame</td>
+          </tr>
+          <tr>
+            <td>取消事件订阅</td>
+            <td>防止 DOM 与回调长期互相引用</td>
+            <td><code>removeEventListener</code>、<code>AbortController</code></td>
+          </tr>
+        </table>
+
+        <h3 id="usage-unfriendly">GC 不友好的操作</h3>
+        <table class="comparison-table">
+          <tr><th>操作</th><th>为什么不友好</th><th>改进方向</th></tr>
+          <tr>
+            <td>热路径大量 <code>{}</code> / <code>[]</code></td>
+            <td>每帧都产生短命对象，触发频繁 GC</td>
+            <td>复用对象、使用 TypedArray</td>
+          </tr>
+          <tr>
+            <td>闭包捕获大对象却未释放</td>
+            <td>大对象生命周期被意外延长</td>
+            <td>只捕获必要字段、显式置 null</td>
+          </tr>
+          <tr>
+            <td>全局缓存无淘汰</td>
+            <td>内存只增不减，老年代膨胀</td>
+            <td>LRU、TTL、WeakMap</td>
+          </tr>
+          <tr>
+            <td>循环中字符串拼接</td>
+            <td>产生大量中间字符串对象</td>
+            <td>数组 join、模板字符串批量生成</td>
+          </tr>
+          <tr>
+            <td><code>setInterval</code> 未清理</td>
+            <td>回调持有上下文，无法回收</td>
+            <td>组件卸载时 <code>clearInterval</code></td>
+          </tr>
+          <tr>
+            <td>Detached DOM</td>
+            <td>DOM 已从树移除，仍被 JS 引用</td>
+            <td>移除 DOM 同时解除事件监听和引用</td>
+          </tr>
+          <tr>
+            <td>订阅总线不取消</td>
+            <td>组件销毁后仍接收消息，持有引用</td>
+            <td>返回 unsubscribe、使用 Dispose 模式</td>
+          </tr>
+        </table>
+
+        <h3 id="usage-practices">最佳实践</h3>
+        <div class="callout callout-tip">
+          <div class="callout-title">💡 最佳实践</div>
+          <ul>
+            <li>用 <code>WeakMap</code> 给对象附加元数据，避免干扰对象生命周期。</li>
+            <li>热路径优先用 <code>const</code> 和局部变量，减少属性访问和对象分配。</li>
+            <li>大数据用 <code>ArrayBuffer</code> / <code>TypedArray</code>，而不是对象数组。</li>
+            <li>组件/路由销毁时统一清理 timer、subscription、事件监听。</li>
+            <li>缓存必须设置容量上限或过期策略。</li>
+            <li>用 Chrome DevTools 的 Memory 面板定期拍 Heap Snapshot 验证。</li>
+          </ul>
+        </div>
+
+        <h3 id="usage-pitfalls">内存陷阱</h3>
+        <div class="callout callout-warning">
+          <div class="callout-title">⚠️ 常见陷阱</div>
+          <ul>
+            <li><strong>console.log 大对象</strong>：DevTools 保留引用，导致 Heap Snapshot 中对象无法释放。</li>
+            <li><strong>忘记 removeEventListener</strong>：DOM 与回调形成循环引用，现代浏览器已能处理，但仍会延长生命周期。</li>
+            <li><strong>Vue/React 中把大对象放进 reactive/ref</strong>：递归代理所有属性，增加内存和追踪开销。</li>
+            <li><strong>图片/Canvas 不释放</strong>：大 Image 对象或 OffscreenCanvas 长期持有。</li>
+            <li><strong>无限滚动不回收 DOM</strong>：节点数持续增长，滚动性能崩溃。</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="principle">
+        <h2>核心原理 <span class="level-badge level-badge-l3">L3</span></h2>
+
+        <h3 id="principle-model">心智模型：可达性图</h3>
+        <pre class="mermaid">
+graph TD
+    Root[GC Root] --> A[全局对象]
+    Root --> B[调用栈局部变量]
+    Root --> C[DOM 树]
+    A --> D[模块级状态]
+    B --> E[局部对象]
+    E --> F[引用的对象]
+    F -.->|无法从 Root 到达| G[垃圾对象]
+        </pre>
+        <p class="mermaid-caption">图：GC 从 Root 出发遍历可达对象，无法到达的视为垃圾</p>
+
+        <h3 id="principle-gc">V8 分代 GC 如何工作</h3>
+        <table>
+          <tr><th>区域</th><th>存放对象</th><th>回收算法</th><th>特点</th></tr>
+          <tr><td>新生代（New Space）</td><td>短命对象</td><td>Scavenge（复制算法）</td><td>频繁、停顿短</td></tr>
+          <tr><td>老生代（Old Space）</td><td>存活较久的对象</td><td>Mark-Sweep + Mark-Compact</td><td>低频、停顿可能长</td></tr>
+          <tr><td>大对象区（Large Object Space）</td><td>超过阈值的大对象</td><td>单独管理</td><td>不移动，直接释放</td></tr>
+        </table>
+        <p>现代 V8 还引入了<strong>增量标记（Incremental Marking）</strong>、<strong>并发标记（Concurrent Marking）</strong>、<strong>并行清理</strong>来减少停顿，但主线程仍会被部分阻塞。</p>
+
+        <h3 id="principle-jank">为什么会卡顿</h3>
+        <ol>
+          <li><strong>分配过快</strong>：新生代很快填满，Scavenge 频繁触发。</li>
+          <li><strong>晋升过多</strong>：短命对象在两次 GC 间幸存，进入老生代，导致 Full GC 成本上升。</li>
+          <li><strong>老年代膨胀</strong>：大缓存、泄漏对象使 Mark-Compact 耗时增加。</li>
+          <li><strong>内存碎片</strong>：长期运行后，Compact 需要移动大量对象。</li>
+        </ol>
+      </section>
+
+      <section id="architecture">
+        <h2>架构友好/不友好 <span class="level-badge level-badge-l4">L4</span></h2>
+
+        <div class="decision-box">
+          <div class="decision-box__section decision-box__yes">
+            <h4>✅ GC 友好架构</h4>
+            <ul>
+              <li><strong>组件生命周期管理</strong>：卸载时统一 dispose。</li>
+              <li><strong>虚拟滚动 / 对象池</strong>：复用 DOM 与数据对象。</li>
+              <li><strong>懒加载 + 按需卸载</strong>：路由/模块离开时释放资源。</li>
+              <li><strong>Worker 卸载计算</strong>：大数据处理放到 Worker，避免阻塞主线程 GC。</li>
+              <li><strong>有界缓存 + LRU</strong>：缓存不会无限增长。</li>
+              <li><strong>细粒度响应式</strong>：只追踪必要依赖，减少派生对象。</li>
+              <li><strong>资源注册表</strong>：集中管理图片、音频、WebGL 纹理。</li>
+            </ul>
+          </div>
+          <div class="decision-box__section decision-box__no">
+            <h4>❌ GC 不友好架构</h4>
+            <ul>
+              <li><strong>全局单例大仓库</strong>：所有状态长期存活，老年代膨胀。</li>
+              <li><strong>无限制事件总线</strong>：订阅只增不减，组件销毁仍被引用。</li>
+              <li><strong>无限列表不回收</strong>：DOM 节点和数据无限累积。</li>
+              <li><strong>全量快照状态管理</strong>：每次更新复制整个状态树。</li>
+              <li><strong>长生命周期闭包</strong>：回调捕获大量上下文。</li>
+              <li><strong>图片/Canvas 无释放</strong>：纹理和位图长期占用 GPU/内存。</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="callout callout-insight">
+          <div class="callout-title">🧠 如果让你来设计一个内存友好的 SPA 框架...</div>
+          <p><strong>问题</strong>：组件频繁创建销毁，如何避免内存泄漏和 GC 压力？</p>
+          <p><strong>直觉方案</strong>：每个组件自己管理事件监听，卸载时手动清理。</p>
+          <p><strong>实际做法</strong>：框架提供统一的 Effect / Scope 系统，订阅与组件生命周期绑定；同时用 WeakMap 存储内部元数据，不干扰用户对象。</p>
+          <p><strong>差异分析</strong>：手动清理容易遗漏，且难以处理异步副作用；生命周期绑定 + 自动追踪能系统性防止泄漏，并减少长期引用。</p>
+        </div>
+      </section>
+
+      <section id="comparison">
+        <h2>GC vs 手动内存管理 <span class="level-badge level-badge-l3">L3</span></h2>
+        <table class="comparison-table">
+          <tr><th>维度</th><th>自动 GC（JavaScript）</th><th>手动管理（C/C++/Rust）</th><th>所有权 + GC 混合（Swift）</th></tr>
+          <tr><td>开发效率</td><td>高</td><td>低</td><td>中</td></tr>
+          <tr><td>运行时停顿</td><td>存在 GC pause</td><td>无</td><td>极小</td></tr>
+          <tr><td>内存泄漏风险</td><td>仍存在（逻辑泄漏）</td><td>Use-after-free / 泄漏</td><td>循环引用需处理</td></tr>
+          <tr><td>可预测性</td><td>低</td><td>高</td><td>高</td></tr>
+          <tr><td>适用场景</td><td>Web、业务应用</td><td>系统、游戏引擎</td><td>移动应用</td></tr>
+        </table>
+      </section>
+
+      <section id="history">
+        <h2>历史演进 <span class="level-badge level-badge-l4">L4</span></h2>
+        <table>
+          <tr><th>时间</th><th>事件</th><th>意义</th></tr>
+          <tr><td>1959</td><td>Lisp 引入自动 GC</td><td>首次在高级语言中实现自动内存管理</td></tr>
+          <tr><td>1960s</td><td>引用计数普及</td><td>简单直接，但无法处理循环引用</td></tr>
+          <tr><td>1984</td><td>分代 GC 提出</td><td>利用「大多数对象短命」的假设优化回收效率</td></tr>
+          <tr><td>2008</td><td>V8 发布</td><td>引入高效分代 GC，推动 JS 高性能化</td></tr>
+          <tr><td>2018+</td><td>V8 并发/增量标记</td><td>显著降低 Full GC 造成的页面卡顿</td></tr>
+          <tr><td>2021+</td><td>WeakRef / FinalizationRegistry</td><td>JS 获得更细粒度的生命周期控制能力</td></tr>
+        </table>
+      </section>
+
+      <section id="summary">
+        <h2>学习要点总结 <span class="level-badge level-badge-l1">L1</span></h2>
+        <ul>
+          <li>GC 友好的核心是：<strong>少创建短命对象、避免无意义长期引用、及时释放资源</strong>。</li>
+          <li>热路径用对象池 / TypedArray，避免每帧分配对象。</li>
+          <li>用 <code>WeakMap</code> / <code>WeakSet</code> / <code>WeakRef</code> 存储不干预生命周期的关联数据。</li>
+          <li>组件/路由/模块销毁时统一清理 timer、subscription、事件监听、DOM 引用。</li>
+          <li>缓存必须有容量上限或过期策略，避免老年代膨胀。</li>
+          <li>架构上采用生命周期绑定、虚拟滚动、Worker 卸载、有界缓存等模式。</li>
+        </ul>
+
+        <h3>延伸阅读</h3>
+        <ul>
+          <li><a href="https://v8.dev/blog/trash-talk" target="_blank">V8: Trash talk</a></li>
+          <li><a href="https://developer.chrome.com/docs/devtools/memory/" target="_blank">Chrome DevTools Memory 面板</a></li>
+          <li><a href="https://web.dev/articles/avoid-large-complex-layouts-and-layout-thrashing" target="_blank">web.dev: Avoid large, complex layouts</a></li>
+          <li><a href="https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Memory_Management" target="_blank">MDN: JavaScript 内存管理</a></li>
+        </ul>
+      </section>
+
+      <div class="page-nav">
+        <a href="../" class="back-to-index">← 返回首页</a>
+      </div>
+    </main>
+  </div>
+  <script>
+    (function () {
+      if (window.innerWidth > 1024) return;
+      var sidebar = document.getElementById('sidebar');
+      var backdrop = document.createElement('div');
+      backdrop.className = 'sidebar-backdrop';
+      backdrop.onclick = function () {
+        sidebar.classList.remove('open');
+        backdrop.classList.remove('open');
+      };
+      document.body.appendChild(backdrop);
+      var btn = document.createElement('button');
+      btn.textContent = '☰ 目录';
+      btn.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:200;padding:10px 16px;border-radius:24px;border:none;background:var(--color-primary);color:#fff;font-size:14px;font-weight:600;cursor:pointer;box-shadow:var(--shadow-lg);';
+      btn.onclick = function () {
+        sidebar.classList.toggle('open');
+        backdrop.classList.toggle('open');
+      };
+      document.body.appendChild(btn);
+    })();
+  </script>
+</body>
+
+</html>
