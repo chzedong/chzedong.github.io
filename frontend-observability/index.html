@@ -1,0 +1,1304 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="tech-type" content="concept">
+  <title>前端可观测性实战 — 告警与埋点的方案、原理与架构思考</title>
+  <style>
+    /* ========================================
+       Deconstruct Tech — 技术对象解构文档样式
+       版本: 2.0.0
+       ======================================== */
+    /* ----- CSS Variables ----- */
+    :root {
+      --color-bg: #ffffff;
+      --color-bg-secondary: #f8f9fa;
+      --color-bg-tertiary: #f1f3f5;
+      --color-text: #1a1a2e;
+      --color-text-secondary: #495057;
+      --color-text-muted: #868e96;
+      --color-border: #dee2e6;
+      --color-border-light: #e9ecef;
+      --color-primary: #2563eb;
+      --color-primary-light: #eff6ff;
+      --color-primary-dark: #1d4ed8;
+      --color-accent: #7c3aed;
+      --color-accent-light: #f5f3ff;
+      --color-success: #059669;
+      --color-success-bg: #ecfdf5;
+      --color-warning: #d97706;
+      --color-warning-bg: #fffbeb;
+      --color-danger: #dc2626;
+      --color-danger-bg: #fef2f2;
+      --color-info: #0891b2;
+      --color-info-bg: #ecfeff;
+      --color-code-bg: #f1f5f9;
+      --color-code-text: #1e293b;
+      --color-inline-code-bg: #f1f5f9;
+      --color-inline-code-text: #e11d48;
+      --sidebar-width: 260px;
+      --header-height: 60px;
+      --max-content-width: 860px;
+      --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
+      --font-mono: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", "Consolas", "Courier New", monospace;
+      --radius: 8px;
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+      --transition: 150ms ease;
+    }
+
+    /* ----- Dark Mode ----- */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --color-bg: #0f172a;
+        --color-bg-secondary: #1e293b;
+        --color-bg-tertiary: #334155;
+        --color-text: #e2e8f0;
+        --color-text-secondary: #94a3b8;
+        --color-text-muted: #64748b;
+        --color-border: #334155;
+        --color-border-light: #1e293b;
+        --color-primary: #3b82f6;
+        --color-primary-light: #1e3a5f;
+        --color-primary-dark: #60a5fa;
+        --color-accent: #8b5cf6;
+        --color-accent-light: #2e1065;
+        --color-success: #10b981;
+        --color-success-bg: #064e3b;
+        --color-warning: #f59e0b;
+        --color-warning-bg: #451a03;
+        --color-danger: #f87171;
+        --color-danger-bg: #450a0a;
+        --color-info: #22d3ee;
+        --color-info-bg: #083344;
+        --color-code-bg: #1e293b;
+        --color-code-text: #e2e8f0;
+        --color-inline-code-bg: #334155;
+        --color-inline-code-text: #f87171;
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+      }
+    }
+
+    /* ----- Reset & Base ----- */
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      scroll-padding-top: calc(var(--header-height) + 20px);
+    }
+
+    body {
+      font-family: var(--font-sans);
+      font-size: 15px;
+      line-height: 1.7;
+      color: var(--color-text);
+      background: var(--color-bg);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* ----- Layout ----- */
+    .layout {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* ----- Sidebar ----- */
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: var(--sidebar-width);
+      height: 100vh;
+      background: var(--color-bg-secondary);
+      border-right: 1px solid var(--color-border);
+      overflow-y: auto;
+      padding: 24px 20px;
+      z-index: 100;
+      transition: transform var(--transition);
+    }
+
+    .sidebar-header {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--color-text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .sidebar-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--color-text);
+      margin-bottom: 20px;
+      line-height: 1.3;
+    }
+
+    .sidebar-title a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .sidebar-nav {
+      list-style: none;
+    }
+
+    .sidebar-nav li {
+      margin-bottom: 2px;
+    }
+
+    .sidebar-nav a {
+      display: block;
+      padding: 6px 12px;
+      border-radius: 6px;
+      color: var(--color-text-secondary);
+      text-decoration: none;
+      font-size: 14px;
+      transition: all var(--transition);
+    }
+
+    .sidebar-nav a:hover {
+      background: var(--color-bg-tertiary);
+      color: var(--color-text);
+    }
+
+    .sidebar-nav a.active {
+      background: var(--color-primary-light);
+      color: var(--color-primary);
+      font-weight: 600;
+    }
+
+    .sidebar-nav .sub-nav {
+      padding-left: 16px;
+    }
+
+    .sidebar-nav .sub-nav a {
+      font-size: 13px;
+    }
+
+    /* ----- Main Content ----- */
+    .main {
+      margin-left: var(--sidebar-width);
+      flex: 1;
+      max-width: var(--max-content-width);
+      padding: 48px 56px 80px;
+    }
+
+    /* ----- Sidebar Backdrop (mobile overlay) ----- */
+    .sidebar-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.35);
+      z-index: 99;
+      opacity: 0;
+      transition: opacity 200ms ease;
+      pointer-events: none;
+    }
+
+    .sidebar-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* ----- Header ----- */
+    .page-header {
+      margin-bottom: 40px;
+      padding-bottom: 32px;
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .page-header h1 {
+      font-size: 32px;
+      font-weight: 800;
+      line-height: 1.2;
+      color: var(--color-text);
+      margin-bottom: 12px;
+      letter-spacing: -0.02em;
+    }
+
+    .page-header .subtitle {
+      font-size: 17px;
+      color: var(--color-text-secondary);
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+
+    .badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+      background: var(--color-bg-tertiary);
+      color: var(--color-text-secondary);
+    }
+
+    .badge-primary {
+      background: var(--color-primary-light);
+      color: var(--color-primary);
+    }
+
+    .badge-accent {
+      background: var(--color-accent-light);
+      color: var(--color-accent);
+    }
+
+    .badge-success {
+      background: var(--color-success-bg);
+      color: var(--color-success);
+    }
+
+    /* ----- Level Tabs ----- */
+    .level-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .level-tab {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--color-text-secondary);
+      background: var(--color-bg-secondary);
+      border: 1px solid var(--color-border);
+      text-decoration: none;
+      transition: all var(--transition);
+    }
+
+    .level-tab:hover {
+      background: var(--color-bg-tertiary);
+      color: var(--color-text);
+      text-decoration: none;
+    }
+
+    .level-tab.active {
+      background: var(--color-primary);
+      color: #fff;
+      border-color: var(--color-primary);
+    }
+
+    /* ----- Mental Model Box ----- */
+    .mental-model {
+      padding: 20px 24px;
+      border-radius: var(--radius);
+      background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-accent-light) 100%);
+      border-left: 4px solid var(--color-primary);
+      margin-bottom: 24px;
+    }
+
+    .mental-model h4 {
+      margin-top: 0;
+      margin-bottom: 8px;
+      color: var(--color-primary);
+      font-size: 16px;
+    }
+
+    .mental-model p {
+      margin-bottom: 0;
+      color: var(--color-text-secondary);
+      font-size: 15px;
+    }
+
+    /* ----- Decision Box ----- */
+    .decision-box {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .decision-box__section {
+      padding: 18px 20px;
+      border-radius: var(--radius);
+      border: 1px solid var(--color-border);
+    }
+
+    .decision-box__section h4 {
+      margin-top: 0;
+      margin-bottom: 12px;
+      font-size: 15px;
+    }
+
+    .decision-box__section ul {
+      margin-bottom: 0;
+      padding-left: 18px;
+      color: var(--color-text-secondary);
+      font-size: 14px;
+    }
+
+    .decision-box__section li {
+      margin-bottom: 6px;
+    }
+
+    .decision-box__yes {
+      background: var(--color-success-bg);
+      border-color: var(--color-success);
+    }
+
+    .decision-box__yes h4 {
+      color: var(--color-success);
+    }
+
+    .decision-box__no {
+      background: var(--color-danger-bg);
+      border-color: var(--color-danger);
+    }
+
+    .decision-box__no h4 {
+      color: var(--color-danger);
+    }
+
+    /* ----- Glossary ----- */
+    .glossary {
+      margin-bottom: 20px;
+    }
+
+    .glossary dt {
+      font-weight: 600;
+      color: var(--color-text);
+      margin-top: 14px;
+      font-size: 15px;
+    }
+
+    .glossary dt:first-child {
+      margin-top: 0;
+    }
+
+    .glossary dd {
+      margin-left: 0;
+      color: var(--color-text-secondary);
+      font-size: 14px;
+      margin-top: 4px;
+    }
+
+    /* ----- Level Badge ----- */
+    .level-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+
+    .level-badge-l1 { background: var(--color-bg-tertiary); color: var(--color-text-muted); }
+    .level-badge-l2 { background: var(--color-success-bg); color: var(--color-success); }
+    .level-badge-l3 { background: var(--color-warning-bg); color: var(--color-warning); }
+    .level-badge-l4 { background: var(--color-accent-light); color: var(--color-accent); }
+
+    /* ----- Sections ----- */
+    section {
+      margin-bottom: 48px;
+    }
+
+    section h2 {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--color-text);
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--color-border-light);
+      letter-spacing: -0.01em;
+    }
+
+    section h3 {
+      font-size: 19px;
+      font-weight: 600;
+      color: var(--color-text);
+      margin-top: 28px;
+      margin-bottom: 12px;
+    }
+
+    section h4 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--color-text-secondary);
+      margin-top: 20px;
+      margin-bottom: 8px;
+    }
+
+    section p {
+      margin-bottom: 14px;
+      color: var(--color-text-secondary);
+    }
+
+    section ul,
+    section ol {
+      margin-bottom: 14px;
+      padding-left: 24px;
+      color: var(--color-text-secondary);
+    }
+
+    section li {
+      margin-bottom: 6px;
+    }
+
+    section a {
+      color: var(--color-primary);
+      text-decoration: none;
+    }
+
+    section a:hover {
+      text-decoration: underline;
+    }
+
+    /* ----- Code Reference Block ----- */
+    .code-ref {
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      margin-bottom: 20px;
+      overflow: hidden;
+      max-width: 100%;
+    }
+
+    .code-ref__header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 16px;
+      background: var(--color-bg-tertiary);
+      border-bottom: 1px solid var(--color-border-light);
+      font-size: 12px;
+    }
+
+    .code-ref__path {
+      font-family: var(--font-mono);
+      color: var(--color-text-muted);
+      font-weight: 500;
+    }
+
+    .code-ref__link {
+      color: var(--color-primary);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 12px;
+    }
+
+    .code-ref__link:hover {
+      text-decoration: underline;
+    }
+
+    .code-ref pre {
+      margin: 0;
+      border: none;
+      border-radius: 0;
+      max-width: 100%;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .code-ref__notes {
+      padding: 10px 16px;
+      background: var(--color-info-bg);
+      border-top: 1px solid var(--color-border-light);
+      font-size: 13px;
+      color: var(--color-text-secondary);
+    }
+
+    /* ----- Learning Path Steps ----- */
+    .reading-path {
+      list-style: none;
+      padding: 0;
+      margin-bottom: 20px;
+    }
+
+    .reading-path li {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      padding: 10px 14px;
+      margin-bottom: 4px;
+      border-radius: 6px;
+      background: var(--color-bg-secondary);
+      font-size: 14px;
+    }
+
+    .reading-path .step-num {
+      flex-shrink: 0;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--color-primary);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .reading-path .step-file {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      color: var(--color-text);
+      min-width: 160px;
+    }
+
+    .reading-path .step-desc {
+      color: var(--color-text-secondary);
+    }
+
+    /* ----- Architecture Highlight Box ----- */
+    .arch-highlight {
+      padding: 20px 24px;
+      border-radius: var(--radius);
+      background: var(--color-accent-light);
+      border-left: 4px solid var(--color-accent);
+      margin-bottom: 20px;
+    }
+
+    .arch-highlight h4 {
+      margin-top: 0;
+      color: var(--color-accent);
+    }
+
+    /* ----- Comparison Table ----- */
+    .comparison-table {
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .comparison-table th:first-child,
+    .comparison-table td:first-child {
+      font-weight: 600;
+      color: var(--color-text);
+    }
+
+    .comparison-table th,
+    .comparison-table td {
+      border-right: 1px solid var(--color-border-light);
+    }
+
+    .comparison-table th:last-child,
+    .comparison-table td:last-child {
+      border-right: none;
+    }
+
+    .comparison-table thead th {
+      background: var(--color-bg-tertiary);
+    }
+
+    code {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      background: var(--color-inline-code-bg);
+      color: var(--color-inline-code-text);
+      padding: 2px 6px;
+      border-radius: 4px;
+      overflow-wrap: anywhere;
+    }
+
+    pre {
+      background: var(--color-code-bg);
+      color: var(--color-code-text);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      overflow-x: auto;
+      margin-bottom: 18px;
+      border: 1px solid var(--color-border-light);
+      font-size: 13px;
+      line-height: 1.6;
+      max-width: 100%;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    pre code {
+      background: none;
+      color: inherit;
+      padding: 0;
+      font-size: inherit;
+      overflow-wrap: anywhere;
+    }
+
+    /* Syntax Highlighting (light) */
+    .kw { color: #7c3aed; font-weight: 600; }
+    .str { color: #059669; }
+    .num { color: #d97706; }
+    .cm { color: #868e96; font-style: italic; }
+    .fn { color: #2563eb; }
+    .op { color: #dc2626; }
+    .type { color: #0891b2; }
+
+    @media (prefers-color-scheme: dark) {
+      .kw { color: #a78bfa; }
+      .str { color: #34d399; }
+      .num { color: #fbbf24; }
+      .cm { color: #64748b; }
+      .fn { color: #60a5fa; }
+      .op { color: #f87171; }
+      .type { color: #22d3ee; }
+    }
+
+    /* ----- Callouts ----- */
+    .callout {
+      padding: 16px 20px;
+      border-radius: var(--radius);
+      margin-bottom: 18px;
+      border-left: 4px solid;
+      font-size: 14px;
+    }
+
+    .callout-title {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .callout-info {
+      background: var(--color-info-bg);
+      border-color: var(--color-info);
+    }
+
+    .callout-tip {
+      background: var(--color-success-bg);
+      border-color: var(--color-success);
+    }
+
+    .callout-warning {
+      background: var(--color-warning-bg);
+      border-color: var(--color-warning);
+    }
+
+    .callout-danger {
+      background: var(--color-danger-bg);
+      border-color: var(--color-danger);
+    }
+
+    .callout-insight {
+      background: var(--color-accent-light);
+      border-color: var(--color-accent);
+    }
+
+    /* ----- Tables ----- */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 18px;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--color-border-light);
+    }
+
+    th {
+      font-weight: 600;
+      color: var(--color-text);
+      background: var(--color-bg-secondary);
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    td {
+      color: var(--color-text-secondary);
+    }
+
+    tr:hover td {
+      background: var(--color-bg-secondary);
+    }
+
+    /* ----- Module Cards ----- */
+    .module-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .module-card {
+      padding: 20px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      transition: all var(--transition);
+      text-decoration: none;
+      color: inherit;
+      display: block;
+    }
+
+    .module-card:hover {
+      border-color: var(--color-primary);
+      box-shadow: var(--shadow-md);
+      text-decoration: none;
+    }
+
+    .module-card h4 {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--color-text);
+      margin: 0 0 6px;
+    }
+
+    .module-card p {
+      font-size: 14px;
+      color: var(--color-text-muted);
+      margin: 0;
+    }
+
+    .module-card .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      background: var(--color-primary-light);
+      color: var(--color-primary);
+      margin-top: 8px;
+    }
+
+    /* ----- Page Navigation ----- */
+    .page-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 56px;
+      padding-top: 24px;
+      border-top: 1px solid var(--color-border);
+    }
+
+    .page-nav a {
+      color: var(--color-primary);
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 14px;
+    }
+
+    .page-nav a:hover {
+      text-decoration: underline;
+    }
+
+    .page-nav .back-to-index {
+      color: var(--color-text-muted);
+    }
+
+    /* ----- Mermaid ----- */
+    .mermaid {
+      margin: 20px 0;
+      padding: 20px;
+      background: var(--color-bg-secondary);
+      border-radius: var(--radius);
+      border: 1px solid var(--color-border-light);
+      overflow-x: auto;
+    }
+
+    .mermaid-caption {
+      text-align: center;
+      font-size: 13px;
+      color: var(--color-text-muted);
+      margin-top: -16px;
+      margin-bottom: 20px;
+    }
+
+    .mermaid svg {
+      max-width: 100%;
+      height: auto;
+    }
+
+    /* ----- Directory Tree ----- */
+    .dir-tree {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.8;
+      color: var(--color-text-secondary);
+      background: var(--color-code-bg);
+      padding: 16px 20px;
+      border-radius: var(--radius);
+      margin-bottom: 18px;
+      white-space: pre;
+      overflow-x: auto;
+      border: 1px solid var(--color-border-light);
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+
+    .dir-tree .comment { color: var(--color-text-muted); }
+    .dir-tree .dir { color: var(--color-primary); font-weight: 600; }
+    .dir-tree .file { color: var(--color-text-secondary); }
+    .dir-tree .important { color: var(--color-accent); font-weight: 600; }
+
+    /* ----- Flow Steps ----- */
+    .flow-steps {
+      counter-reset: step;
+      list-style: none;
+      padding: 0;
+      margin-bottom: 20px;
+    }
+
+    .flow-steps li {
+      counter-increment: step;
+      position: relative;
+      padding-left: 40px;
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-left: 2px solid var(--color-border);
+    }
+
+    .flow-steps li:last-child {
+      border-left-color: transparent;
+    }
+
+    .flow-steps li::before {
+      content: counter(step);
+      position: absolute;
+      left: -14px;
+      top: 0;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--color-primary);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ----- Utility ----- */
+    .text-muted { color: var(--color-text-muted); }
+    .text-sm { font-size: 13px; }
+    .mt-0 { margin-top: 0; }
+    .mb-0 { margin-bottom: 0; }
+    .highlight {
+      background: linear-gradient(120deg, var(--color-warning-bg) 0%, var(--color-warning-bg) 100%);
+      padding: 2px 4px;
+      border-radius: 2px;
+    }
+
+    /* ----- Responsive ----- */
+    @media (max-width: 1024px) {
+      .sidebar-backdrop { display: block; }
+      .sidebar {
+        transform: translateX(-100%);
+        box-shadow: var(--shadow-lg);
+      }
+      .sidebar.open { transform: translateX(0); }
+      .main {
+        margin-left: 0;
+        padding: 32px 24px;
+        max-width: 100%;
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .main { padding: 24px 18px; }
+      .page-header h1 { font-size: 26px; }
+      section h2 { font-size: 20px; }
+      section h3 { font-size: 17px; }
+      pre {
+        font-size: 12px;
+        padding: 16px 18px;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      table {
+        font-size: 12px;
+        display: block;
+        overflow-x: auto;
+        max-width: 100%;
+      }
+      th, td { padding: 8px 10px; }
+      .reading-path li {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+      }
+      .reading-path .step-file { min-width: auto; }
+      .dir-tree {
+        font-size: 11px;
+        padding: 12px 14px;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .module-grid { grid-template-columns: 1fr; }
+      .decision-box { grid-template-columns: 1fr; }
+      .level-tabs { gap: 6px; }
+      .level-tab { padding: 5px 10px; font-size: 12px; }
+      .mental-model { padding: 16px 18px; }
+    }
+
+    @media (max-width: 480px) {
+      .main { padding: 16px 12px; }
+      .page-header h1 { font-size: 22px; }
+      section h2 { font-size: 18px; }
+      section h3 { font-size: 16px; }
+      .page-nav {
+        flex-direction: column;
+        gap: 12px;
+        align-items: flex-start;
+      }
+      .sidebar {
+        width: 85vw;
+        max-width: 300px;
+      }
+      .flow-steps li { padding-left: 30px; }
+    }
+
+    /* ----- Print ----- */
+    @media print {
+      .sidebar { display: none; }
+      .main { margin-left: 0; padding: 0; max-width: 100%; }
+      .page-nav { display: none; }
+      pre, .dir-tree { white-space: pre-wrap; word-break: break-all; }
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>mermaid.initialize({ startOnLoad: true, theme: 'default' });</script>
+</head>
+
+<body>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">技术解构</div>
+      <div class="sidebar-title"><a href="index.html">前端可观测性实战</a></div>
+      <ul class="sidebar-nav">
+        <li><a href="#overview">阅读地图</a></li>
+        <li><a href="#background">背景与问题</a></li>
+        <li><a href="#quickstart">快速上手</a></li>
+        <li><a href="#usage">用法详解</a></li>
+        <li class="sub-nav"><a href="#usage-alert">告警方案</a></li>
+        <li class="sub-nav"><a href="#usage-tracking">埋点方案</a></li>
+        <li class="sub-nav"><a href="#usage-tools">优秀工具与库</a></li>
+        <li class="sub-nav"><a href="#usage-practices">最佳实践</a></li>
+        <li><a href="#principle">核心原理</a></li>
+        <li class="sub-nav"><a href="#principle-model">可观测性三角</a></li>
+        <li class="sub-nav"><a href="#principle-alert">告警链路</a></li>
+        <li class="sub-nav"><a href="#principle-tracking">埋点数据流</a></li>
+        <li><a href="#architecture">架构思考</a></li>
+        <li><a href="#comparison">方案对比</a></li>
+        <li><a href="#history">历史演进</a></li>
+        <li><a href="#summary">学习要点</a></li>
+      </ul>
+    </aside>
+    <main class="main" id="main-content">
+      <header class="page-header">
+        <h1>前端可观测性实战</h1>
+        <p class="subtitle">告警与埋点的方案、原理与架构思考：让前端系统从「黑盒」变成「可观测」。</p>
+        <div class="badges">
+          <span class="badge badge-primary">Concept</span>
+          <span class="badge badge-accent">L1-L4</span>
+          <span class="badge">Sentry · OpenTelemetry · Web Vitals</span>
+        </div>
+        <div class="level-tabs">
+          <a href="#overview" class="level-tab">L1 概览</a>
+          <a href="#quickstart" class="level-tab active">L2 用法</a>
+          <a href="#principle" class="level-tab">L3 原理</a>
+          <a href="#architecture" class="level-tab">L4 精通</a>
+        </div>
+      </header>
+
+      <section id="overview">
+        <h2>阅读地图</h2>
+        <p>本文档同时覆盖「用法」与「原理」两条线。你可以根据自己的目标选择阅读深度：</p>
+        <ul class="reading-path">
+          <li><span class="step-num">L1</span><span class="step-file">概览</span><span class="step-desc">5 分钟理解前端可观测性、告警、埋点分别解决什么问题。</span></li>
+          <li><span class="step-num">L2</span><span class="step-file">用法</span><span class="step-desc">30 分钟掌握常见告警/埋点方案与工具选型。</span></li>
+          <li><span class="step-num">L3</span><span class="step-file">原理</span><span class="step-desc">2 小时理解告警链路、埋点数据流、采样与聚合机制。</span></li>
+          <li><span class="step-num">L4</span><span class="step-file">精通</span><span class="step-desc">能设计一套适合自己业务的前端可观测体系。</span></li>
+        </ul>
+        <div class="mental-model">
+          <h4>🧠 心智模型</h4>
+          <p>前端可观测性 = <strong>日志（Logs）+ 指标（Metrics）+ 链路（Traces）</strong>。告警是「发现问题」的手段，埋点是「理解行为」的手段；两者结合，既能知道系统坏了，也能知道用户怎么用的。</p>
+        </div>
+      </section>
+
+      <section id="background">
+        <h2>背景与问题 <span class="level-badge level-badge-l1">L1</span></h2>
+        <p>前端代码运行在用户浏览器里，环境复杂、网络不可控、错误难以复现。传统后端监控无法覆盖前端特有的问题：</p>
+        <ul>
+          <li><strong>错误感知滞后</strong>：用户截图反馈时，已经影响大量人。</li>
+          <li><strong>性能黑盒</strong>：首屏慢、交互卡顿，但不知道瓶颈在哪。</li>
+          <li><strong>行为不可见</strong>：用户点了哪里、在哪个步骤流失，只能靠猜。</li>
+          <li><strong>多端差异</strong>：浏览器、小程序、桌面端，问题表现各不相同。</li>
+        </ul>
+        <p><strong>告警</strong>解决「系统有没有病」的问题，<strong>埋点</strong>解决「用户怎么用」的问题。好的架构师会把二者融入研发流程，而不是事后补丁。</p>
+      </section>
+
+      <section id="quickstart">
+        <h2>快速上手 <span class="level-badge level-badge-l2">L2</span></h2>
+        <h3>最小可运行示例：Sentry 接入</h3>
+        <pre><code>import * as Sentry from '@sentry/browser'
+
+Sentry.init({
+  dsn: 'https://xxx@xxx.ingest.sentry.io/xxx',
+  integrations: [Sentry.browserTracingIntegration()],
+  tracesSampleRate: 0.1,
+  replaysSessionSampleRate: 0.01,
+})
+
+// 自动捕获未处理异常
+throw new Error('something went wrong')
+
+// 手动上报
+Sentry.captureMessage('User reached payment page')</code></pre>
+        <h3>最小可运行示例：自定义埋点</h3>
+        <pre><code>function track(event, props = {}) {
+  const payload = {
+    event,
+    props,
+    ts: Date.now(),
+    url: location.href,
+    ua: navigator.userAgent,
+  }
+  navigator.sendBeacon('/api/track', JSON.stringify(payload))
+}
+
+track('button_click', { id: 'submit-order' })</code></pre>
+      </section>
+
+      <section id="usage">
+        <h2>用法详解 <span class="level-badge level-badge-l2">L2</span></h2>
+
+        <h3 id="usage-alert">告警方案</h3>
+        <table class="comparison-table">
+          <tr><th>类型</th><th>监控对象</th><th>典型工具</th><th>触发条件</th></tr>
+          <tr><td>错误告警</td><td>JS 异常、Promise 未捕获、资源加载失败</td><td>Sentry, Rollbar, Bugsnag</td><td>错误数/影响用户数超过阈值</td></tr>
+          <tr><td>性能告警</td><td>LCP、FID/INP、CLS、TTFB</td><td>Web Vitals, Datadog RUM, New Relic</td><td>核心指标低于标准</td></tr>
+          <tr><td>业务告警</td><td>转化率、支付失败率、白屏率</td><td>自建 + BI 平台</td><td>业务指标异常波动</td></tr>
+          <tr><td>可用性告警</td><td>CDN 可用性、接口成功率</td><td>Pingdom, UptimeRobot</td><td>服务不可达</td></tr>
+        </table>
+
+        <h3 id="usage-tracking">埋点方案</h3>
+        <table class="comparison-table">
+          <tr><th>方案</th><th>实现方式</th><th>优点</th><th>缺点</th><th>适用场景</th></tr>
+          <tr><td>代码埋点</td><td>开发在关键位置手动调用 <code>track()</code></td><td>精确、可控</td><td>侵入代码、维护成本高</td><td>核心业务流程</td></tr>
+          <tr><td>可视化埋点</td><td>运营通过圈选页面元素配置事件</td><td>非侵入、业务人员可操作</td><td>只能覆盖静态元素</td><td>活动页、运营位</td></tr>
+          <tr><td>无埋点/全埋点</td><td>自动采集所有点击、曝光、页面切换</td><td>覆盖全面、回溯能力强</td><td>数据量大、噪音多、隐私合规风险</td><td>探索性分析</td></tr>
+          <tr><td>服务端埋点</td><td>在 BFF/API 网关记录业务行为</td><td>防篡改、数据一致性高</td><td>无法捕获前端交互细节</td><td>关键业务事件</td></tr>
+        </table>
+
+        <h3 id="usage-tools">优秀工具与库</h3>
+        <table>
+          <tr><th>领域</th><th>工具/库</th><th>特点</th></tr>
+          <tr><td>错误监控</td><td><a href="https://sentry.io/" target="_blank">Sentry</a></td><td>开源、生态成熟、支持 Replay</td></tr>
+          <tr><td>性能监控</td><td><a href="https://github.com/GoogleChrome/web-vitals" target="_blank">web-vitals</a></td><td>Google 官方，精确采集 Core Web Vitals</td></tr>
+          <tr><td>链路追踪</td><td><a href="https://opentelemetry.io/" target="_blank">OpenTelemetry</a></td><td>跨语言标准，可对接多种后端</td></tr>
+          <tr><td>埋点平台</td><td><a href="https://segment.com/" target="_blank">Segment</a> / <a href="https://amplitude.com/" target="_blank">Amplitude</a></td><td>用户行为分析、漏斗、留存</td></tr>
+          <tr><td>开源埋点</td><td><a href="https://github.com/umijs/umi-request" target="_blank">自研 SDK</a> / <a href="https://github.com/dcloudio/uni-stat" target="_blank">uni-stat</a></td><td>灵活、可控、成本低</td></tr>
+          <tr><td>日志聚合</td><td><a href="https://www.elastic.co/" target="_blank">ELK</a> / <a href="https://grafana.com/" target="_blank">Grafana Loki</a></td><td>日志存储、检索、可视化</td></tr>
+        </table>
+
+        <h3 id="usage-practices">最佳实践</h3>
+        <div class="callout callout-tip">
+          <div class="callout-title">💡 最佳实践</div>
+          <ul>
+            <li><strong>错误去重与聚合</strong>：相同错误合并，避免告警风暴。</li>
+            <li><strong>采样率分层</strong>：错误 100% 采集，性能 10%，全埋点 1% 或按用户采样。</li>
+            <li><strong>关联上下文</strong>：每条错误/事件带上 release 版本、用户 ID、页面路径、设备信息。</li>
+            <li><strong>埋点文档化</strong>：维护埋点字典，定义事件名、属性、触发时机。</li>
+            <li><strong>优先级分级</strong>：P0 错误立即通知，P1 次日汇总，P2 周报回顾。</li>
+            <li><strong>隐私合规</strong>：敏感字段脱敏，符合 GDPR/个人信息保护法要求。</li>
+          </ul>
+        </div>
+
+        <h3 id="usage-pitfalls">常见陷阱</h3>
+        <div class="callout callout-warning">
+          <div class="callout-title">⚠️ 常见陷阱</div>
+          <ul>
+            <li><strong>告警疲劳</strong>：阈值过低，导致群里告警被忽略。</li>
+            <li><strong>全量采集</strong>：不采样，数据量和成本爆炸。</li>
+            <li><strong>忽视用户隐私</strong>：采集设备 ID、手机号等敏感信息。</li>
+            <li><strong>只看不行动</strong>：埋点数据存在 BI 平台，但没有反馈到产品迭代。</li>
+            <li><strong>前后端口径不一致</strong>：同一个指标，前端埋点和服务端统计对不上。</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="principle">
+        <h2>核心原理 <span class="level-badge level-badge-l3">L3</span></h2>
+
+        <h3 id="principle-model">可观测性三角</h3>
+        <pre class="mermaid">
+graph TD
+    Logs[日志 Logs] -->|上下文| Traces[链路 Traces]
+    Metrics[指标 Metrics] -->|趋势| Logs
+    Traces -->|关联| Metrics
+    Logs --> Alert[告警 Alert]
+    Metrics --> Alert
+    Traces --> Alert
+    Alert --> Incident[事件响应]
+    Logs --> Tracking[埋点 Tracking]
+    Tracking --> Product[产品决策]
+        </pre>
+        <p class="mermaid-caption">图：可观测性三角与告警、埋点的关系</p>
+
+        <h3 id="principle-alert">告警链路</h3>
+        <ol class="flow-steps">
+          <li><strong>采集</strong>：SDK 捕获异常、性能指标、业务事件。</li>
+          <li><strong>上报</strong>：通过 <code>sendBeacon</code>、XHR、WebSocket 发送到服务端。</li>
+          <li><strong>清洗</strong>：去重、格式化、补全上下文。</li>
+          <li><strong>聚合</strong>：按错误指纹、时间段、版本维度汇总。</li>
+          <li><strong>告警</strong>：触发阈值时通过 PagerDuty、钉钉、飞书、邮件通知。</li>
+          <li><strong>恢复</strong>：错误率回落后自动关闭告警，并记录处理过程。</li>
+        </ol>
+
+        <h3 id="principle-tracking">埋点数据流</h3>
+        <ol class="flow-steps">
+          <li><strong>触发</strong>：用户行为或系统事件产生。</li>
+          <li><strong>采集</strong>：SDK 记录事件名、属性、时间、上下文。</li>
+          <li><strong>缓冲</strong>：本地队列，批量上报，失败重试。</li>
+          <li><strong>传输</strong>：压缩后发送到埋点网关。</li>
+          <li><strong>清洗</strong>：校验、补全、去重、格式转换。</li>
+          <li><strong>存储</strong>：进入数据仓库或实时数仓。</li>
+          <li><strong>分析</strong>：漏斗、留存、路径、归因。</li>
+        </ol>
+      </section>
+
+      <section id="architecture">
+        <h2>架构思考 <span class="level-badge level-badge-l4">L4</span></h2>
+
+        <h3>好的架构师如何利用告警与埋点</h3>
+        <div class="decision-box">
+          <div class="decision-box__section decision-box__yes">
+            <h4>✅ 正确姿势</h4>
+            <ul>
+              <li>把监控纳入 Definition of Done，新功能上线必带监控。</li>
+              <li>告警分层： On-Call 处理 P0，团队日会看 P1，周报回顾 P2。</li>
+              <li>埋点驱动产品：A/B 测试、漏斗分析、留存追踪。</li>
+              <li>建立可观测性基线：知道「正常」长什么样，才能识别异常。</li>
+              <li>错误与发布关联：每个错误都知道是哪个版本引入的。</li>
+              <li>成本意识：采样、聚合、冷热分层存储。</li>
+            </ul>
+          </div>
+          <div class="decision-box__section decision-box__no">
+            <h4>❌ 常见反模式</h4>
+            <ul>
+              <li>监控只是运维的事，开发不管。</li>
+              <li>所有错误都告警，导致告警疲劳。</li>
+              <li>埋点无限扩张，采集一切但不分析。</li>
+              <li>线上出问题才加监控，平时不维护。</li>
+              <li>前后端监控割裂，无法串联完整链路。</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="callout callout-insight">
+          <div class="callout-title">🧠 如果让你来设计一套前端可观测体系...</div>
+          <p><strong>问题</strong>：如何在有限的成本下，既快速发现线上问题，又能理解用户行为？</p>
+          <p><strong>直觉方案</strong>：接入 Sentry 捕获错误，再用一个埋点 SDK 采集所有点击。</p>
+          <p><strong>更好的做法</strong>：把告警和埋点统一到一个数据平台，错误事件本身也是一种埋点；通过 Trace ID 把前端请求、后端调用、数据库查询串起来；用采样和分级降低成本。</p>
+          <p><strong>差异分析</strong>：分离的体系会导致数据孤岛，排查问题时需要切换多个平台；统一的 Trace + 事件模型能缩短 MTTR（平均修复时间），并让行为数据与系统数据相互印证。</p>
+        </div>
+
+        <h3>推荐架构分层</h3>
+        <table>
+          <tr><th>层级</th><th>职责</th><th>技术选择</th></tr>
+          <tr><td>采集层</td><td>SDK、浏览器 API、框架集成</td><td>Sentry SDK, web-vitals, OpenTelemetry JS</td></tr>
+          <tr><td>传输层</td><td>可靠上报、压缩、失败重试</td><td>sendBeacon, Fetch, Kafka</td></tr>
+          <tr><td>处理层</td><td>清洗、聚合、关联、采样</td><td>Flink, Logstash, Cloud Functions</td></tr>
+          <tr><td>存储层</td><td>时序数据、日志、事件</td><td>ClickHouse, Elasticsearch, S3</td></tr>
+          <tr><td>应用层</td><td>告警、Dashboard、分析</td><td>Grafana, Sentry, Amplitude, 自建平台</td></tr>
+        </table>
+      </section>
+
+      <section id="comparison">
+        <h2>方案对比 <span class="level-badge level-badge-l2">L3</span></h2>
+        <table class="comparison-table">
+          <tr><th>维度</th><th>Sentry</th><th>OpenTelemetry</th><th>自建 SDK + 平台</th></tr>
+          <tr><td>错误监控</td><td>⭐⭐⭐⭐⭐</td><td>⭐⭐⭐</td><td>⭐⭐⭐⭐</td></tr>
+          <tr><td>性能监控</td><td>⭐⭐⭐⭐</td><td>⭐⭐⭐⭐⭐</td><td>⭐⭐⭐</td></tr>
+          <tr><td>链路追踪</td><td>⭐⭐⭐</td><td>⭐⭐⭐⭐⭐</td><td>⭐⭐⭐</td></tr>
+          <tr><td>埋点分析</td><td>⭐⭐</td><td>⭐⭐</td><td>⭐⭐⭐⭐⭐</td></tr>
+          <tr><td>成本</td><td>中高</td><td>中</td><td>可控</td></tr>
+          <tr><td>灵活性</td><td>中</td><td>高</td><td>最高</td></tr>
+        </table>
+        <p><strong>选型建议</strong>：中小团队直接用 Sentry + web-vitals；大型业务用 OpenTelemetry 做标准化采集，自建或对接 Grafana/ClickHouse 做分析；对埋点深度要求高的业务可自建埋点平台。</p>
+      </section>
+
+      <section id="history">
+        <h2>历史演进 <span class="level-badge level-badge-l4">L4</span></h2>
+        <table>
+          <tr><th>时间</th><th>阶段</th><th>特征</th></tr>
+          <tr><td>2010 前</td><td>日志时代</td><td>服务端日志为主，前端靠用户反馈</td></tr>
+          <tr><td>2010-2015</td><td>错误监控时代</td><td>Airbrake、Sentry 出现，前端开始捕获 JS Error</td></tr>
+          <tr><td>2015-2018</td><td>性能监控时代</td><td>Navigation Timing、Resource Timing、Web Vitals 普及</td></tr>
+          <tr><td>2018-2021</td><td>埋点与分析时代</td><td>GrowingIO、神策、Amplitude 推动埋点精细化</td></tr>
+          <tr><td>2021 至今</td><td>可观测性统一时代</td><td>OpenTelemetry、Session Replay、RUM + APM 一体化</td></tr>
+        </table>
+      </section>
+
+      <section id="summary">
+        <h2>学习要点总结 <span class="level-badge level-badge-l1">L1</span></h2>
+        <ul>
+          <li>前端可观测性 = <strong>日志 + 指标 + 链路</strong>，告警和埋点是两个核心抓手。</li>
+          <li><strong>告警</strong>用于发现系统问题，分为错误、性能、业务、可用性四类。</li>
+          <li><strong>埋点</strong>用于理解用户行为，分为代码埋点、可视化埋点、无埋点、服务端埋点。</li>
+          <li>好的架构师会把监控纳入研发流程，分层告警、合理采样、关联上下文。</li>
+          <li>推荐组合：Sentry / OpenTelemetry 做采集，Grafana / ClickHouse / 自建平台做分析。</li>
+          <li>避免告警疲劳、过度采集、隐私违规、前后端口径不一致。</li>
+        </ul>
+
+        <h3>延伸阅读</h3>
+        <ul>
+          <li><a href="https://sentry.io/for/frontend/" target="_blank">Sentry for Frontend</a></li>
+          <li><a href="https://opentelemetry.io/docs/instrumentation/js/" target="_blank">OpenTelemetry JavaScript</a></li>
+          <li><a href="https://web.dev/vitals/" target="_blank">Web Vitals</a></li>
+          <li><a href="https://grafana.com/docs/tempo/latest/" target="_blank">Grafana Tempo 分布式追踪</a></li>
+          <li>书籍：SRE: Site Reliability Engineering（Google）</li>
+        </ul>
+      </section>
+
+      <div class="page-nav">
+        <a href="../" class="back-to-index">← 返回首页</a>
+      </div>
+    </main>
+  </div>
+  <script>
+    (function () {
+      if (window.innerWidth > 1024) return;
+      var sidebar = document.getElementById('sidebar');
+      var backdrop = document.createElement('div');
+      backdrop.className = 'sidebar-backdrop';
+      backdrop.onclick = function () {
+        sidebar.classList.remove('open');
+        backdrop.classList.remove('open');
+      };
+      document.body.appendChild(backdrop);
+      var btn = document.createElement('button');
+      btn.textContent = '☰ 目录';
+      btn.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:200;padding:10px 16px;border-radius:24px;border:none;background:var(--color-primary);color:#fff;font-size:14px;font-weight:600;cursor:pointer;box-shadow:var(--shadow-lg);';
+      btn.onclick = function () {
+        sidebar.classList.toggle('open');
+        backdrop.classList.toggle('open');
+      };
+      document.body.appendChild(btn);
+    })();
+  </script>
+</body>
+
+</html>
