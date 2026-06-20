@@ -50,6 +50,7 @@ const TYPE_LABELS = {
   library: 'Library',
   framework: 'Framework',
   concept: 'Concept',
+  practice: 'Practice',
   paradigm: 'Paradigm',
   protocol: 'Protocol',
 };

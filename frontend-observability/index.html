@@ -4,979 +4,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="tech-type" content="concept">
-  <title>前端可观测性实战 — 告警与埋点的方案、原理与架构思考</title>
-  <style>
-    /* ========================================
-       Deconstruct Tech — 技术对象解构文档样式
-       版本: 2.0.0
-       ======================================== */
-    /* ----- CSS Variables ----- */
-    :root {
-      --color-bg: #ffffff;
-      --color-bg-secondary: #f8f9fa;
-      --color-bg-tertiary: #f1f3f5;
-      --color-text: #1a1a2e;
-      --color-text-secondary: #495057;
-      --color-text-muted: #868e96;
-      --color-border: #dee2e6;
-      --color-border-light: #e9ecef;
-      --color-primary: #2563eb;
-      --color-primary-light: #eff6ff;
-      --color-primary-dark: #1d4ed8;
-      --color-accent: #7c3aed;
-      --color-accent-light: #f5f3ff;
-      --color-success: #059669;
-      --color-success-bg: #ecfdf5;
-      --color-warning: #d97706;
-      --color-warning-bg: #fffbeb;
-      --color-danger: #dc2626;
-      --color-danger-bg: #fef2f2;
-      --color-info: #0891b2;
-      --color-info-bg: #ecfeff;
-      --color-code-bg: #f1f5f9;
-      --color-code-text: #1e293b;
-      --color-inline-code-bg: #f1f5f9;
-      --color-inline-code-text: #e11d48;
-      --sidebar-width: 260px;
-      --header-height: 60px;
-      --max-content-width: 860px;
-      --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
-      --font-mono: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", "Consolas", "Courier New", monospace;
-      --radius: 8px;
-      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
-      --transition: 150ms ease;
-    }
-
-    /* ----- Dark Mode ----- */
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --color-bg: #0f172a;
-        --color-bg-secondary: #1e293b;
-        --color-bg-tertiary: #334155;
-        --color-text: #e2e8f0;
-        --color-text-secondary: #94a3b8;
-        --color-text-muted: #64748b;
-        --color-border: #334155;
-        --color-border-light: #1e293b;
-        --color-primary: #3b82f6;
-        --color-primary-light: #1e3a5f;
-        --color-primary-dark: #60a5fa;
-        --color-accent: #8b5cf6;
-        --color-accent-light: #2e1065;
-        --color-success: #10b981;
-        --color-success-bg: #064e3b;
-        --color-warning: #f59e0b;
-        --color-warning-bg: #451a03;
-        --color-danger: #f87171;
-        --color-danger-bg: #450a0a;
-        --color-info: #22d3ee;
-        --color-info-bg: #083344;
-        --color-code-bg: #1e293b;
-        --color-code-text: #e2e8f0;
-        --color-inline-code-bg: #334155;
-        --color-inline-code-text: #f87171;
-        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
-        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
-      }
-    }
-
-    /* ----- Reset & Base ----- */
-    *,
-    *::before,
-    *::after {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    html {
-      scroll-behavior: smooth;
-      scroll-padding-top: calc(var(--header-height) + 20px);
-    }
-
-    body {
-      font-family: var(--font-sans);
-      font-size: 15px;
-      line-height: 1.7;
-      color: var(--color-text);
-      background: var(--color-bg);
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-    }
-
-    /* ----- Layout ----- */
-    .layout {
-      display: flex;
-      min-height: 100vh;
-    }
-
-    /* ----- Sidebar ----- */
-    .sidebar {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: var(--sidebar-width);
-      height: 100vh;
-      background: var(--color-bg-secondary);
-      border-right: 1px solid var(--color-border);
-      overflow-y: auto;
-      padding: 24px 20px;
-      z-index: 100;
-      transition: transform var(--transition);
-    }
-
-    .sidebar-header {
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--color-text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 16px;
-      padding-bottom: 12px;
-      border-bottom: 1px solid var(--color-border);
-    }
-
-    .sidebar-title {
-      font-size: 16px;
-      font-weight: 700;
-      color: var(--color-text);
-      margin-bottom: 20px;
-      line-height: 1.3;
-    }
-
-    .sidebar-title a {
-      color: inherit;
-      text-decoration: none;
-    }
-
-    .sidebar-nav {
-      list-style: none;
-    }
-
-    .sidebar-nav li {
-      margin-bottom: 2px;
-    }
-
-    .sidebar-nav a {
-      display: block;
-      padding: 6px 12px;
-      border-radius: 6px;
-      color: var(--color-text-secondary);
-      text-decoration: none;
-      font-size: 14px;
-      transition: all var(--transition);
-    }
-
-    .sidebar-nav a:hover {
-      background: var(--color-bg-tertiary);
-      color: var(--color-text);
-    }
-
-    .sidebar-nav a.active {
-      background: var(--color-primary-light);
-      color: var(--color-primary);
-      font-weight: 600;
-    }
-
-    .sidebar-nav .sub-nav {
-      padding-left: 16px;
-    }
-
-    .sidebar-nav .sub-nav a {
-      font-size: 13px;
-    }
-
-    /* ----- Main Content ----- */
-    .main {
-      margin-left: var(--sidebar-width);
-      flex: 1;
-      max-width: var(--max-content-width);
-      padding: 48px 56px 80px;
-    }
-
-    /* ----- Sidebar Backdrop (mobile overlay) ----- */
-    .sidebar-backdrop {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.35);
-      z-index: 99;
-      opacity: 0;
-      transition: opacity 200ms ease;
-      pointer-events: none;
-    }
-
-    .sidebar-backdrop.open {
-      opacity: 1;
-      pointer-events: auto;
-    }
-
-    /* ----- Header ----- */
-    .page-header {
-      margin-bottom: 40px;
-      padding-bottom: 32px;
-      border-bottom: 1px solid var(--color-border);
-    }
-
-    .page-header h1 {
-      font-size: 32px;
-      font-weight: 800;
-      line-height: 1.2;
-      color: var(--color-text);
-      margin-bottom: 12px;
-      letter-spacing: -0.02em;
-    }
-
-    .page-header .subtitle {
-      font-size: 17px;
-      color: var(--color-text-secondary);
-      line-height: 1.6;
-      margin-bottom: 16px;
-    }
-
-    .badges {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 8px;
-    }
-
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      padding: 3px 10px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 500;
-      background: var(--color-bg-tertiary);
-      color: var(--color-text-secondary);
-    }
-
-    .badge-primary {
-      background: var(--color-primary-light);
-      color: var(--color-primary);
-    }
-
-    .badge-accent {
-      background: var(--color-accent-light);
-      color: var(--color-accent);
-    }
-
-    .badge-success {
-      background: var(--color-success-bg);
-      color: var(--color-success);
-    }
-
-    /* ----- Level Tabs ----- */
-    .level-tabs {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 16px;
-    }
-
-    .level-tab {
-      display: inline-flex;
-      align-items: center;
-      padding: 6px 14px;
-      border-radius: 20px;
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--color-text-secondary);
-      background: var(--color-bg-secondary);
-      border: 1px solid var(--color-border);
-      text-decoration: none;
-      transition: all var(--transition);
-    }
-
-    .level-tab:hover {
-      background: var(--color-bg-tertiary);
-      color: var(--color-text);
-      text-decoration: none;
-    }
-
-    .level-tab.active {
-      background: var(--color-primary);
-      color: #fff;
-      border-color: var(--color-primary);
-    }
-
-    /* ----- Mental Model Box ----- */
-    .mental-model {
-      padding: 20px 24px;
-      border-radius: var(--radius);
-      background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-accent-light) 100%);
-      border-left: 4px solid var(--color-primary);
-      margin-bottom: 24px;
-    }
-
-    .mental-model h4 {
-      margin-top: 0;
-      margin-bottom: 8px;
-      color: var(--color-primary);
-      font-size: 16px;
-    }
-
-    .mental-model p {
-      margin-bottom: 0;
-      color: var(--color-text-secondary);
-      font-size: 15px;
-    }
-
-    /* ----- Decision Box ----- */
-    .decision-box {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-
-    .decision-box__section {
-      padding: 18px 20px;
-      border-radius: var(--radius);
-      border: 1px solid var(--color-border);
-    }
-
-    .decision-box__section h4 {
-      margin-top: 0;
-      margin-bottom: 12px;
-      font-size: 15px;
-    }
-
-    .decision-box__section ul {
-      margin-bottom: 0;
-      padding-left: 18px;
-      color: var(--color-text-secondary);
-      font-size: 14px;
-    }
-
-    .decision-box__section li {
-      margin-bottom: 6px;
-    }
-
-    .decision-box__yes {
-      background: var(--color-success-bg);
-      border-color: var(--color-success);
-    }
-
-    .decision-box__yes h4 {
-      color: var(--color-success);
-    }
-
-    .decision-box__no {
-      background: var(--color-danger-bg);
-      border-color: var(--color-danger);
-    }
-
-    .decision-box__no h4 {
-      color: var(--color-danger);
-    }
-
-    /* ----- Glossary ----- */
-    .glossary {
-      margin-bottom: 20px;
-    }
-
-    .glossary dt {
-      font-weight: 600;
-      color: var(--color-text);
-      margin-top: 14px;
-      font-size: 15px;
-    }
-
-    .glossary dt:first-child {
-      margin-top: 0;
-    }
-
-    .glossary dd {
-      margin-left: 0;
-      color: var(--color-text-secondary);
-      font-size: 14px;
-      margin-top: 4px;
-    }
-
-    /* ----- Level Badge ----- */
-    .level-badge {
-      display: inline-flex;
-      align-items: center;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 11px;
-      font-weight: 600;
-      margin-left: 8px;
-      vertical-align: middle;
-    }
-
-    .level-badge-l1 { background: var(--color-bg-tertiary); color: var(--color-text-muted); }
-    .level-badge-l2 { background: var(--color-success-bg); color: var(--color-success); }
-    .level-badge-l3 { background: var(--color-warning-bg); color: var(--color-warning); }
-    .level-badge-l4 { background: var(--color-accent-light); color: var(--color-accent); }
-
-    /* ----- Sections ----- */
-    section {
-      margin-bottom: 48px;
-    }
-
-    section h2 {
-      font-size: 24px;
-      font-weight: 700;
-      color: var(--color-text);
-      margin-bottom: 16px;
-      padding-bottom: 8px;
-      border-bottom: 1px solid var(--color-border-light);
-      letter-spacing: -0.01em;
-    }
-
-    section h3 {
-      font-size: 19px;
-      font-weight: 600;
-      color: var(--color-text);
-      margin-top: 28px;
-      margin-bottom: 12px;
-    }
-
-    section h4 {
-      font-size: 16px;
-      font-weight: 600;
-      color: var(--color-text-secondary);
-      margin-top: 20px;
-      margin-bottom: 8px;
-    }
-
-    section p {
-      margin-bottom: 14px;
-      color: var(--color-text-secondary);
-    }
-
-    section ul,
-    section ol {
-      margin-bottom: 14px;
-      padding-left: 24px;
-      color: var(--color-text-secondary);
-    }
-
-    section li {
-      margin-bottom: 6px;
-    }
-
-    section a {
-      color: var(--color-primary);
-      text-decoration: none;
-    }
-
-    section a:hover {
-      text-decoration: underline;
-    }
-
-    /* ----- Code Reference Block ----- */
-    .code-ref {
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius);
-      margin-bottom: 20px;
-      overflow: hidden;
-      max-width: 100%;
-    }
-
-    .code-ref__header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 8px 16px;
-      background: var(--color-bg-tertiary);
-      border-bottom: 1px solid var(--color-border-light);
-      font-size: 12px;
-    }
-
-    .code-ref__path {
-      font-family: var(--font-mono);
-      color: var(--color-text-muted);
-      font-weight: 500;
-    }
-
-    .code-ref__link {
-      color: var(--color-primary);
-      text-decoration: none;
-      font-weight: 600;
-      font-size: 12px;
-    }
-
-    .code-ref__link:hover {
-      text-decoration: underline;
-    }
-
-    .code-ref pre {
-      margin: 0;
-      border: none;
-      border-radius: 0;
-      max-width: 100%;
-      width: 100%;
-      box-sizing: border-box;
-    }
-
-    .code-ref__notes {
-      padding: 10px 16px;
-      background: var(--color-info-bg);
-      border-top: 1px solid var(--color-border-light);
-      font-size: 13px;
-      color: var(--color-text-secondary);
-    }
-
-    /* ----- Learning Path Steps ----- */
-    .reading-path {
-      list-style: none;
-      padding: 0;
-      margin-bottom: 20px;
-    }
-
-    .reading-path li {
-      display: flex;
-      align-items: baseline;
-      gap: 12px;
-      padding: 10px 14px;
-      margin-bottom: 4px;
-      border-radius: 6px;
-      background: var(--color-bg-secondary);
-      font-size: 14px;
-    }
-
-    .reading-path .step-num {
-      flex-shrink: 0;
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-      background: var(--color-primary);
-      color: #fff;
-      font-size: 11px;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .reading-path .step-file {
-      font-family: var(--font-mono);
-      font-weight: 600;
-      color: var(--color-text);
-      min-width: 160px;
-    }
-
-    .reading-path .step-desc {
-      color: var(--color-text-secondary);
-    }
-
-    /* ----- Architecture Highlight Box ----- */
-    .arch-highlight {
-      padding: 20px 24px;
-      border-radius: var(--radius);
-      background: var(--color-accent-light);
-      border-left: 4px solid var(--color-accent);
-      margin-bottom: 20px;
-    }
-
-    .arch-highlight h4 {
-      margin-top: 0;
-      color: var(--color-accent);
-    }
-
-    /* ----- Comparison Table ----- */
-    .comparison-table {
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius);
-      overflow: hidden;
-    }
-
-    .comparison-table th:first-child,
-    .comparison-table td:first-child {
-      font-weight: 600;
-      color: var(--color-text);
-    }
-
-    .comparison-table th,
-    .comparison-table td {
-      border-right: 1px solid var(--color-border-light);
-    }
-
-    .comparison-table th:last-child,
-    .comparison-table td:last-child {
-      border-right: none;
-    }
-
-    .comparison-table thead th {
-      background: var(--color-bg-tertiary);
-    }
-
-    code {
-      font-family: var(--font-mono);
-      font-size: 13px;
-      background: var(--color-inline-code-bg);
-      color: var(--color-inline-code-text);
-      padding: 2px 6px;
-      border-radius: 4px;
-      overflow-wrap: anywhere;
-    }
-
-    pre {
-      background: var(--color-code-bg);
-      color: var(--color-code-text);
-      border-radius: var(--radius);
-      padding: 20px 24px;
-      overflow-x: auto;
-      margin-bottom: 18px;
-      border: 1px solid var(--color-border-light);
-      font-size: 13px;
-      line-height: 1.6;
-      max-width: 100%;
-      width: 100%;
-      box-sizing: border-box;
-    }
-
-    pre code {
-      background: none;
-      color: inherit;
-      padding: 0;
-      font-size: inherit;
-      overflow-wrap: anywhere;
-    }
-
-    /* Syntax Highlighting (light) */
-    .kw { color: #7c3aed; font-weight: 600; }
-    .str { color: #059669; }
-    .num { color: #d97706; }
-    .cm { color: #868e96; font-style: italic; }
-    .fn { color: #2563eb; }
-    .op { color: #dc2626; }
-    .type { color: #0891b2; }
-
-    @media (prefers-color-scheme: dark) {
-      .kw { color: #a78bfa; }
-      .str { color: #34d399; }
-      .num { color: #fbbf24; }
-      .cm { color: #64748b; }
-      .fn { color: #60a5fa; }
-      .op { color: #f87171; }
-      .type { color: #22d3ee; }
-    }
-
-    /* ----- Callouts ----- */
-    .callout {
-      padding: 16px 20px;
-      border-radius: var(--radius);
-      margin-bottom: 18px;
-      border-left: 4px solid;
-      font-size: 14px;
-    }
-
-    .callout-title {
-      font-weight: 600;
-      margin-bottom: 4px;
-    }
-
-    .callout-info {
-      background: var(--color-info-bg);
-      border-color: var(--color-info);
-    }
-
-    .callout-tip {
-      background: var(--color-success-bg);
-      border-color: var(--color-success);
-    }
-
-    .callout-warning {
-      background: var(--color-warning-bg);
-      border-color: var(--color-warning);
-    }
-
-    .callout-danger {
-      background: var(--color-danger-bg);
-      border-color: var(--color-danger);
-    }
-
-    .callout-insight {
-      background: var(--color-accent-light);
-      border-color: var(--color-accent);
-    }
-
-    /* ----- Tables ----- */
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 18px;
-      font-size: 14px;
-    }
-
-    th,
-    td {
-      padding: 10px 14px;
-      text-align: left;
-      border-bottom: 1px solid var(--color-border-light);
-    }
-
-    th {
-      font-weight: 600;
-      color: var(--color-text);
-      background: var(--color-bg-secondary);
-      font-size: 13px;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
-    }
-
-    td {
-      color: var(--color-text-secondary);
-    }
-
-    tr:hover td {
-      background: var(--color-bg-secondary);
-    }
-
-    /* ----- Module Cards ----- */
-    .module-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-
-    .module-card {
-      padding: 20px;
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius);
-      transition: all var(--transition);
-      text-decoration: none;
-      color: inherit;
-      display: block;
-    }
-
-    .module-card:hover {
-      border-color: var(--color-primary);
-      box-shadow: var(--shadow-md);
-      text-decoration: none;
-    }
-
-    .module-card h4 {
-      font-size: 17px;
-      font-weight: 700;
-      color: var(--color-text);
-      margin: 0 0 6px;
-    }
-
-    .module-card p {
-      font-size: 14px;
-      color: var(--color-text-muted);
-      margin: 0;
-    }
-
-    .module-card .tag {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 11px;
-      font-weight: 600;
-      background: var(--color-primary-light);
-      color: var(--color-primary);
-      margin-top: 8px;
-    }
-
-    /* ----- Page Navigation ----- */
-    .page-nav {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-top: 56px;
-      padding-top: 24px;
-      border-top: 1px solid var(--color-border);
-    }
-
-    .page-nav a {
-      color: var(--color-primary);
-      text-decoration: none;
-      font-weight: 500;
-      font-size: 14px;
-    }
-
-    .page-nav a:hover {
-      text-decoration: underline;
-    }
-
-    .page-nav .back-to-index {
-      color: var(--color-text-muted);
-    }
-
-    /* ----- Mermaid ----- */
-    .mermaid {
-      margin: 20px 0;
-      padding: 20px;
-      background: var(--color-bg-secondary);
-      border-radius: var(--radius);
-      border: 1px solid var(--color-border-light);
-      overflow-x: auto;
-    }
-
-    .mermaid-caption {
-      text-align: center;
-      font-size: 13px;
-      color: var(--color-text-muted);
-      margin-top: -16px;
-      margin-bottom: 20px;
-    }
-
-    .mermaid svg {
-      max-width: 100%;
-      height: auto;
-    }
-
-    /* ----- Directory Tree ----- */
-    .dir-tree {
-      font-family: var(--font-mono);
-      font-size: 13px;
-      line-height: 1.8;
-      color: var(--color-text-secondary);
-      background: var(--color-code-bg);
-      padding: 16px 20px;
-      border-radius: var(--radius);
-      margin-bottom: 18px;
-      white-space: pre;
-      overflow-x: auto;
-      border: 1px solid var(--color-border-light);
-      max-width: 100%;
-      box-sizing: border-box;
-    }
-
-    .dir-tree .comment { color: var(--color-text-muted); }
-    .dir-tree .dir { color: var(--color-primary); font-weight: 600; }
-    .dir-tree .file { color: var(--color-text-secondary); }
-    .dir-tree .important { color: var(--color-accent); font-weight: 600; }
-
-    /* ----- Flow Steps ----- */
-    .flow-steps {
-      counter-reset: step;
-      list-style: none;
-      padding: 0;
-      margin-bottom: 20px;
-    }
-
-    .flow-steps li {
-      counter-increment: step;
-      position: relative;
-      padding-left: 40px;
-      margin-bottom: 16px;
-      padding-bottom: 16px;
-      border-left: 2px solid var(--color-border);
-    }
-
-    .flow-steps li:last-child {
-      border-left-color: transparent;
-    }
-
-    .flow-steps li::before {
-      content: counter(step);
-      position: absolute;
-      left: -14px;
-      top: 0;
-      width: 26px;
-      height: 26px;
-      border-radius: 50%;
-      background: var(--color-primary);
-      color: #fff;
-      font-size: 12px;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    /* ----- Utility ----- */
-    .text-muted { color: var(--color-text-muted); }
-    .text-sm { font-size: 13px; }
-    .mt-0 { margin-top: 0; }
-    .mb-0 { margin-bottom: 0; }
-    .highlight {
-      background: linear-gradient(120deg, var(--color-warning-bg) 0%, var(--color-warning-bg) 100%);
-      padding: 2px 4px;
-      border-radius: 2px;
-    }
-
-    /* ----- Responsive ----- */
-    @media (max-width: 1024px) {
-      .sidebar-backdrop { display: block; }
-      .sidebar {
-        transform: translateX(-100%);
-        box-shadow: var(--shadow-lg);
-      }
-      .sidebar.open { transform: translateX(0); }
-      .main {
-        margin-left: 0;
-        padding: 32px 24px;
-        max-width: 100%;
-        width: 100%;
-      }
-    }
-
-    @media (max-width: 768px) {
-      .main { padding: 24px 18px; }
-      .page-header h1 { font-size: 26px; }
-      section h2 { font-size: 20px; }
-      section h3 { font-size: 17px; }
-      pre {
-        font-size: 12px;
-        padding: 16px 18px;
-        white-space: pre-wrap;
-        overflow-wrap: anywhere;
-      }
-      table {
-        font-size: 12px;
-        display: block;
-        overflow-x: auto;
-        max-width: 100%;
-      }
-      th, td { padding: 8px 10px; }
-      .reading-path li {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 4px;
-      }
-      .reading-path .step-file { min-width: auto; }
-      .dir-tree {
-        font-size: 11px;
-        padding: 12px 14px;
-        white-space: pre-wrap;
-        overflow-wrap: anywhere;
-      }
-      .module-grid { grid-template-columns: 1fr; }
-      .decision-box { grid-template-columns: 1fr; }
-      .level-tabs { gap: 6px; }
-      .level-tab { padding: 5px 10px; font-size: 12px; }
-      .mental-model { padding: 16px 18px; }
-    }
-
-    @media (max-width: 480px) {
-      .main { padding: 16px 12px; }
-      .page-header h1 { font-size: 22px; }
-      section h2 { font-size: 18px; }
-      section h3 { font-size: 16px; }
-      .page-nav {
-        flex-direction: column;
-        gap: 12px;
-        align-items: flex-start;
-      }
-      .sidebar {
-        width: 85vw;
-        max-width: 300px;
-      }
-      .flow-steps li { padding-left: 30px; }
-    }
-
-    /* ----- Print ----- */
-    @media print {
-      .sidebar { display: none; }
-      .main { margin-left: 0; padding: 0; max-width: 100%; }
-      .page-nav { display: none; }
-      pre, .dir-tree { white-space: pre-wrap; word-break: break-all; }
-    }
-  </style>
+  <meta name="tech-type" content="practice">
+  <title>前端可观测性实战 — 从埋点、监控到告警的完整工程体系</title>
+  <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
   <script>mermaid.initialize({ startOnLoad: true, theme: 'default' });</script>
 </head>
@@ -991,49 +21,53 @@
         <li><a href="#background">背景与问题</a></li>
         <li><a href="#quickstart">快速上手</a></li>
         <li><a href="#usage">用法详解</a></li>
-        <li class="sub-nav"><a href="#usage-alert">告警方案</a></li>
+        <li class="sub-nav"><a href="#usage-error">错误监控</a></li>
+        <li class="sub-nav"><a href="#usage-perf">性能监控</a></li>
         <li class="sub-nav"><a href="#usage-tracking">埋点方案</a></li>
-        <li class="sub-nav"><a href="#usage-tools">优秀工具与库</a></li>
-        <li class="sub-nav"><a href="#usage-practices">最佳实践</a></li>
+        <li class="sub-nav"><a href="#usage-sampling">采样策略</a></li>
         <li><a href="#principle">核心原理</a></li>
         <li class="sub-nav"><a href="#principle-model">可观测性三角</a></li>
-        <li class="sub-nav"><a href="#principle-alert">告警链路</a></li>
+        <li class="sub-nav"><a href="#principle-error">错误采集链路</a></li>
+        <li class="sub-nav"><a href="#principle-perf">性能指标原理</a></li>
         <li class="sub-nav"><a href="#principle-tracking">埋点数据流</a></li>
-        <li><a href="#architecture">架构思考</a></li>
+        <li class="sub-nav"><a href="#principle-sampling">采样算法</a></li>
+        <li><a href="#engineering">工程实现与架构</a></li>
+        <li><a href="#contrast">如果我来写</a></li>
         <li><a href="#comparison">方案对比</a></li>
         <li><a href="#history">历史演进</a></li>
         <li><a href="#summary">学习要点</a></li>
       </ul>
     </aside>
+
     <main class="main" id="main-content">
       <header class="page-header">
         <h1>前端可观测性实战</h1>
-        <p class="subtitle">告警与埋点的方案、原理与架构思考：让前端系统从「黑盒」变成「可观测」。</p>
+        <p class="subtitle">从埋点、监控到告警的完整工程体系：让前端系统从「黑盒」变成「可观测」。</p>
         <div class="badges">
-          <span class="badge badge-primary">Concept</span>
+          <span class="badge badge-primary">Practice</span>
           <span class="badge badge-accent">L1-L4</span>
-          <span class="badge">Sentry · OpenTelemetry · Web Vitals</span>
+          <span class="badge">Web Vitals · OpenTelemetry · RUM</span>
         </div>
         <div class="level-tabs">
           <a href="#overview" class="level-tab">L1 概览</a>
           <a href="#quickstart" class="level-tab active">L2 用法</a>
           <a href="#principle" class="level-tab">L3 原理</a>
-          <a href="#architecture" class="level-tab">L4 精通</a>
+          <a href="#engineering" class="level-tab">L4 精通</a>
         </div>
       </header>
 
       <section id="overview">
         <h2>阅读地图</h2>
-        <p>本文档同时覆盖「用法」与「原理」两条线。你可以根据自己的目标选择阅读深度：</p>
+        <p>本文档覆盖前端可观测性的「用法」与「原理」两条线，重点放在工程实现和真实 trade-off 上。</p>
         <ul class="reading-path">
-          <li><span class="step-num">L1</span><span class="step-file">概览</span><span class="step-desc">5 分钟理解前端可观测性、告警、埋点分别解决什么问题。</span></li>
-          <li><span class="step-num">L2</span><span class="step-file">用法</span><span class="step-desc">30 分钟掌握常见告警/埋点方案与工具选型。</span></li>
-          <li><span class="step-num">L3</span><span class="step-file">原理</span><span class="step-desc">2 小时理解告警链路、埋点数据流、采样与聚合机制。</span></li>
-          <li><span class="step-num">L4</span><span class="step-file">精通</span><span class="step-desc">能设计一套适合自己业务的前端可观测体系。</span></li>
+          <li><span class="step-num">L1</span><span class="step-file">概览</span><span class="step-desc">5 分钟理解可观测性三角、埋点、监控、告警分别解决什么问题。</span></li>
+          <li><span class="step-num">L2</span><span class="step-file">用法</span><span class="step-desc">30 分钟掌握错误监控、性能监控、埋点、采样的具体方案和关键 API。</span></li>
+          <li><span class="step-num">L3</span><span class="step-file">原理</span><span class="step-desc">2 小时理解浏览器 API、数据流、采样算法、指标阈值来源。</span></li>
+          <li><span class="step-num">L4</span><span class="step-file">精通</span><span class="step-desc">能设计一套适合自己业务的前端可观测体系，并评估成本与风险。</span></li>
         </ul>
         <div class="mental-model">
           <h4>🧠 心智模型</h4>
-          <p>前端可观测性 = <strong>日志（Logs）+ 指标（Metrics）+ 链路（Traces）</strong>。告警是「发现问题」的手段，埋点是「理解行为」的手段；两者结合，既能知道系统坏了，也能知道用户怎么用的。</p>
+          <p>前端可观测性不是"接入 Sentry"或"埋几个点"，而是 <strong>Logs + Metrics + Traces + RUM + 埋点</strong> 的体系化工程。<strong>错误监控</strong>回答"系统有没有病"，<strong>性能监控</strong>回答"哪里慢"，<strong>埋点</strong>回答"用户怎么用"，<strong>告警</strong>是让这些数据产生行动的手段。</p>
         </div>
       </section>
 
@@ -1041,235 +75,574 @@
         <h2>背景与问题 <span class="level-badge level-badge-l1">L1</span></h2>
         <p>前端代码运行在用户浏览器里，环境复杂、网络不可控、错误难以复现。传统后端监控无法覆盖前端特有的问题：</p>
         <ul>
-          <li><strong>错误感知滞后</strong>：用户截图反馈时，已经影响大量人。</li>
-          <li><strong>性能黑盒</strong>：首屏慢、交互卡顿，但不知道瓶颈在哪。</li>
-          <li><strong>行为不可见</strong>：用户点了哪里、在哪个步骤流失，只能靠猜。</li>
-          <li><strong>多端差异</strong>：浏览器、小程序、桌面端，问题表现各不相同。</li>
+          <li><strong>错误感知滞后</strong>：用户截图反馈时，问题已经影响大量人；没有 stack trace 和用户环境信息，本地难以复现。</li>
+          <li><strong>性能黑盒</strong>：首屏慢、交互卡顿，但不知道瓶颈在 DNS、TTFB、JS 执行、渲染还是第三方脚本。</li>
+          <li><strong>行为不可见</strong>：用户点了哪里、在哪个步骤流失、A/B 实验效果如何，只能靠猜。</li>
+          <li><strong>多端差异</strong>：浏览器、小程序、桌面端、不同网络条件下问题表现各不相同。</li>
         </ul>
-        <p><strong>告警</strong>解决「系统有没有病」的问题，<strong>埋点</strong>解决「用户怎么用」的问题。好的架构师会把二者融入研发流程，而不是事后补丁。</p>
+        <p>后端监控主要关注服务可用性和接口延迟，而前端监控必须面对 <strong>不可控的运行时环境</strong>、<strong>异步事件驱动</strong>、<strong>SPA 路由切换</strong>、<strong>第三方脚本干扰</strong> 等独特挑战。</p>
       </section>
 
       <section id="quickstart">
         <h2>快速上手 <span class="level-badge level-badge-l2">L2</span></h2>
-        <h3>最小可运行示例：Sentry 接入</h3>
-        <pre><code>import * as Sentry from '@sentry/browser'
 
-Sentry.init({
-  dsn: 'https://xxx@xxx.ingest.sentry.io/xxx',
-  integrations: [Sentry.browserTracingIntegration()],
-  tracesSampleRate: 0.1,
-  replaysSessionSampleRate: 0.01,
+        <h3>示例 1：原生错误 + 性能采集 SDK</h3>
+        <p>不依赖第三方库，直接用浏览器 API 搭建最小可运行采集器：</p>
+        <div class="code-ref">
+          <div class="code-ref__header">
+            <span class="code-ref__path">最小可运行采集器</span>
+            <a class="code-ref__link" href="https://developer.mozilla.org/en-US/docs/Web/API/PerformanceObserver" target="_blank">MDN: PerformanceObserver</a>
+          </div>
+          <pre><code>// 错误采集
+window.addEventListener('error', (event) => {
+  report({ type: 'error', message: event.message, filename: event.filename, lineno: event.lineno })
+})
+window.addEventListener('unhandledrejection', (event) => {
+  report({ type: 'unhandledrejection', reason: String(event.reason) })
 })
 
-// 自动捕获未处理异常
-throw new Error('something went wrong')
-
-// 手动上报
-Sentry.captureMessage('User reached payment page')</code></pre>
-        <h3>最小可运行示例：自定义埋点</h3>
-        <pre><code>function track(event, props = {}) {
-  const payload = {
-    event,
-    props,
-    ts: Date.now(),
-    url: location.href,
-    ua: navigator.userAgent,
+// 性能采集：LCP、CLS、INP
+const observer = new PerformanceObserver((list) => {
+  for (const entry of list.getEntries()) {
+    if (entry.entryType === 'largest-contentful-paint') {
+      report({ type: 'lcp', value: entry.startTime, element: entry.element?.tagName })
+    }
+    if (entry.entryType === 'layout-shift' && !entry.hadRecentInput) {
+      report({ type: 'cls', value: entry.value })
+    }
+    if (entry.entryType === 'event' && entry.interactionId) {
+      report({ type: 'inp', value: entry.duration, interactionId: entry.interactionId })
+    }
   }
-  navigator.sendBeacon('/api/track', JSON.stringify(payload))
-}
+})
+observer.observe({ type: 'largest-contentful-paint', buffered: true })
+observer.observe({ type: 'layout-shift', buffered: true })
+observer.observe({ type: 'event', buffered: true, durationThreshold: 0 })</code></pre>
+          <div class="code-ref__notes">
+            <strong>关键参数</strong>：<code>buffered: true</code> 允许获取在观察者注册前已经产生的性能条目，这对 SDK 延迟加载很重要。<code>durationThreshold: 0</code> 是采集 INP 的前提，否则 Event Timing 条目可能被过滤。
+          </div>
+        </div>
 
-track('button_click', { id: 'submit-order' })</code></pre>
+        <h3>示例 2：生产级 track() 函数</h3>
+        <p>一个带队列、批量、失败重试、页面关闭兜底的埋点 SDK 最小实现：</p>
+        <div class="code-ref">
+          <div class="code-ref__header">
+            <span class="code-ref__path">生产级埋点 SDK 最小实现</span>
+            <a class="code-ref__link" href="https://www.w3.org/TR/beacon/" target="_blank">W3C Beacon API</a>
+          </div>
+          <pre><code>function createTracker(endpoint, { sampleRate = 1.0, batchSize = 10, flushInterval = 5000 } = {}) {
+  const queue = []
+  let timer = null
+
+  function send(events) {
+    if (Math.random() > sampleRate) return // 采样
+    const payload = JSON.stringify(events)
+    const blob = new Blob([payload], { type: 'application/json' })
+
+    // 优先 sendBeacon，页面关闭时也能尽力发送
+    if (navigator.sendBeacon && navigator.sendBeacon(endpoint, blob)) return
+
+    // 兜底：fetch keepalive
+    fetch(endpoint, { method: 'POST', body: blob, keepalive: true }).catch(() => {
+      // 失败时存入 localStorage/IndexedDB 稍后重试
+      saveToRetryStore(events)
+    })
+  }
+
+  function flush() {
+    if (queue.length === 0) return
+    const batch = queue.splice(0, queue.length)
+    send(batch)
+  }
+
+  function track(event, props = {}) {
+    queue.push({
+      event,
+      props,
+      ts: Date.now(),
+      url: location.href,
+      sessionId: getSessionId(),
+      eventId: generateEventId(),
+    })
+    if (queue.length >= batchSize) flush()
+    if (!timer) timer = setInterval(flush, flushInterval)
+  }
+
+  // 页面隐藏时强制 flush
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flush()
+  })
+
+  return { track, flush }
+}</code></pre>
+          <div class="code-ref__notes">
+            <strong>设计要点</strong>：1) <code>eventId</code> 用于服务端去重；2) <code>sessionId</code> 用于漏斗分析和会话一致性采样；3) <code>visibilitychange</code> 比 <code>beforeunload</code> 更可靠，尤其在移动端；4) <code>sendBeacon</code> 返回 <code>false</code> 说明超出浏览器队列配额，需要降级。
+          </div>
+        </div>
       </section>
 
       <section id="usage">
         <h2>用法详解 <span class="level-badge level-badge-l2">L2</span></h2>
 
-        <h3 id="usage-alert">告警方案</h3>
+        <h3 id="usage-error">错误监控</h3>
+        <p>前端错误监控的核心是捕获三类信息：JavaScript 运行时异常、Promise 未捕获拒绝、资源加载失败。浏览器提供了不同 API，但各自有覆盖盲区。</p>
+
         <table class="comparison-table">
-          <tr><th>类型</th><th>监控对象</th><th>典型工具</th><th>触发条件</th></tr>
-          <tr><td>错误告警</td><td>JS 异常、Promise 未捕获、资源加载失败</td><td>Sentry, Rollbar, Bugsnag</td><td>错误数/影响用户数超过阈值</td></tr>
-          <tr><td>性能告警</td><td>LCP、FID/INP、CLS、TTFB</td><td>Web Vitals, Datadog RUM, New Relic</td><td>核心指标低于标准</td></tr>
-          <tr><td>业务告警</td><td>转化率、支付失败率、白屏率</td><td>自建 + BI 平台</td><td>业务指标异常波动</td></tr>
-          <tr><td>可用性告警</td><td>CDN 可用性、接口成功率</td><td>Pingdom, UptimeRobot</td><td>服务不可达</td></tr>
+          <tr><th>API</th><th>捕获什么</th><th>盲区</th><th>锚点</th></tr>
+          <tr><td><code>window.onerror</code></td><td>JS 运行时异常</td><td>无法捕获资源加载失败、Promise 错误</td><td>HTML Standard §8.1.3.10</td></tr>
+          <tr><td><code>window.addEventListener('error')</code></td><td>JS 异常 + 资源加载失败</td><td>Promise 拒绝</td><td>DOM Standard</td></tr>
+          <tr><td><code>unhandledrejection</code></td><td>未处理的 Promise 拒绝</td><td>同步异常</td><td>HTML Standard</td></tr>
+          <tr><td>React ErrorBoundary</td><td>React 组件渲染错误</td><td>事件处理、异步代码、SSR 错误</td><td>React 文档</td></tr>
         </table>
+
+        <div class="callout callout-warning">
+          <div class="callout-title">⚠️ 踩坑：跨域脚本错误</div>
+          <p>加载第三方 CDN 脚本时，如果脚本没有 <code>crossorigin="anonymous"</code> 且 CDN 没有返回 <code>Access-Control-Allow-Origin</code>，错误信息会变成 <code>Script error.</code>，没有文件名、行号、堆栈。</p>
+          <p><strong>调试方法</strong>：在测试环境强制要求所有外部脚本开启 CORS，并在 Sentry 中查看错误样本是否包含完整 stack。</p>
+        </div>
+
+        <p><strong>错误指纹</strong>是错误聚合的关键。一个朴素的做法是把错误消息直接作为 key，但不同用户遇到同一个 bug 时消息可能包含变量值（如 <code>Cannot read property 'foo' of undefined</code> 对比 <code>Cannot read property 'bar' of undefined</code>）。成熟的做法是：</p>
+        <ol>
+          <li>解析 stack trace，提取函数名和文件路径；</li>
+          <li>对消息做正则化，移除 UUID、数字、用户 ID 等变量；</li>
+          <li>结合 release 版本和构建产物 sourcemap 还原原始代码位置；</li>
+          <li>生成稳定的 fingerprint 用于聚合。</li>
+        </ol>
+
+        <h3 id="usage-perf">性能监控（Web Vitals + RUM）</h3>
+        <p>前端性能监控依赖 W3C Performance Timeline 系列 API。核心入口是 <code>PerformanceObserver</code>，它取代了旧的轮询 <code>performance.getEntries()</code> 方式。</p>
+
+        <table class="comparison-table">
+          <tr><th>指标</th><th>含义</th><th>Good / Needs Improvement / Poor</th><th>对应 API</th></tr>
+          <tr><td>LCP</td><td>最大内容元素渲染时间</td><td>≤2.5s / ≤4s / &gt;4s</td><td><code>largest-contentful-paint</code></td></tr>
+          <tr><td>INP</td><td>交互到下一帧绘制最大延迟</td><td>≤200ms / ≤500ms / &gt;500ms</td><td><code>event</code> (Event Timing)</td></tr>
+          <tr><td>CLS</td><td>累积布局偏移</td><td>≤0.1 / ≤0.25 / &gt;0.25</td><td><code>layout-shift</code></td></tr>
+          <tr><td>TTFB</td><td>首字节时间</td><td>≤800ms / ≤1800ms / &gt;1800ms</td><td><code>navigation</code></td></tr>
+          <tr><td>FCP</td><td>首次内容绘制</td><td>≤1.8s / ≤3s / &gt;3s</td><td><code>paint</code></td></tr>
+        </table>
+
+        <div class="callout callout-tip">
+          <div class="callout-title">💡 为什么是这些指标和阈值？</div>
+          <ul>
+            <li><strong>LCP</strong>：用户感知"页面主要内容已加载"的关键时刻。阈值 2.5s 来自 Google 对真实用户跳出率和体验的研究（CrUX 数据），是 75th percentile 的 good 线。</li>
+            <li><strong>INP</strong>：2024 年 3 月替代 FID，因为 FID 只测首次交互且多数网站轻松达标，无法反映整体交互卡顿。INP 取整个会话中最差交互延迟，更能代表真实体验。</li>
+            <li><strong>CLS</strong>：量化"页面加载时元素突然跳动"的体验。分数 = impact fraction × distance fraction，0.1 以下用户基本无感知。</li>
+            <li><strong>75th percentile</strong>：Google 评估标准是 75% 的访问达到 good。这比中位数更严格，但比 95th percentile 更稳定，避免少数极端网络环境导致整体失败。</li>
+          </ul>
+        </div>
+
+        <p><strong>SPA 路由切换的性能陷阱</strong>：标准 Navigation Timing 只测量完整页面加载，不捕获 <code>history.pushState</code> 引起的软导航。因此 SPA 需要手动测量：</p>
+        <div class="code-ref">
+          <div class="code-ref__header"><span class="code-ref__path">SPA 路由切换手动测量</span></div>
+          <pre><code>let routeStartTime = performance.now()
+window.addEventListener('popstate', () => { routeStartTime = performance.now() })
+
+// 在路由切换完成、关键元素渲染后调用
+function markRouteComplete(routeName) {
+  const duration = performance.now() - routeStartTime
+  report({ type: 'spa_route', route: routeName, duration })
+}</code></pre>
+          <div class="code-ref__notes">不同框架的"路由完成"定义不同：React Router 的 <code>useEffect</code>、Vue Router 的 <code>afterEach</code>、Next.js 的 <code>router.events</code>。必须约定一个统一标准，否则跨页面数据不可比。</div>
+        </div>
 
         <h3 id="usage-tracking">埋点方案</h3>
+        <p>埋点不是简单地在按钮上加 <code>onClick</code>，而是一套事件模型、采集机制、治理流程的体系。</p>
+
         <table class="comparison-table">
           <tr><th>方案</th><th>实现方式</th><th>优点</th><th>缺点</th><th>适用场景</th></tr>
-          <tr><td>代码埋点</td><td>开发在关键位置手动调用 <code>track()</code></td><td>精确、可控</td><td>侵入代码、维护成本高</td><td>核心业务流程</td></tr>
-          <tr><td>可视化埋点</td><td>运营通过圈选页面元素配置事件</td><td>非侵入、业务人员可操作</td><td>只能覆盖静态元素</td><td>活动页、运营位</td></tr>
-          <tr><td>无埋点/全埋点</td><td>自动采集所有点击、曝光、页面切换</td><td>覆盖全面、回溯能力强</td><td>数据量大、噪音多、隐私合规风险</td><td>探索性分析</td></tr>
-          <tr><td>服务端埋点</td><td>在 BFF/API 网关记录业务行为</td><td>防篡改、数据一致性高</td><td>无法捕获前端交互细节</td><td>关键业务事件</td></tr>
+          <tr><td>代码埋点</td><td>开发手动调用 <code>track()</code></td><td>精确、可控、属性完整</td><td>侵入代码、维护成本高、容易遗漏</td><td>核心业务流程</td></tr>
+          <tr><td>可视化埋点</td><td>运营圈选页面元素配置事件</td><td>非侵入、业务人员可操作</td><td>只能覆盖静态元素、动态内容难适配</td><td>活动页、运营位</td></tr>
+          <tr><td>无埋点/全埋点</td><td>自动采集点击、曝光、页面切换</td><td>覆盖全面、回溯能力强</td><td>数据量大、噪音多、隐私合规风险</td><td>探索性分析</td></tr>
+          <tr><td>服务端埋点</td><td>BFF/API 网关记录业务行为</td><td>防篡改、数据一致性高</td><td>无法捕获前端交互细节</td><td>关键业务事件</td></tr>
         </table>
 
-        <h3 id="usage-tools">优秀工具与库</h3>
-        <table>
-          <tr><th>领域</th><th>工具/库</th><th>特点</th></tr>
-          <tr><td>错误监控</td><td><a href="https://sentry.io/" target="_blank">Sentry</a></td><td>开源、生态成熟、支持 Replay</td></tr>
-          <tr><td>性能监控</td><td><a href="https://github.com/GoogleChrome/web-vitals" target="_blank">web-vitals</a></td><td>Google 官方，精确采集 Core Web Vitals</td></tr>
-          <tr><td>链路追踪</td><td><a href="https://opentelemetry.io/" target="_blank">OpenTelemetry</a></td><td>跨语言标准，可对接多种后端</td></tr>
-          <tr><td>埋点平台</td><td><a href="https://segment.com/" target="_blank">Segment</a> / <a href="https://amplitude.com/" target="_blank">Amplitude</a></td><td>用户行为分析、漏斗、留存</td></tr>
-          <tr><td>开源埋点</td><td><a href="https://github.com/umijs/umi-request" target="_blank">自研 SDK</a> / <a href="https://github.com/dcloudio/uni-stat" target="_blank">uni-stat</a></td><td>灵活、可控、成本低</td></tr>
-          <tr><td>日志聚合</td><td><a href="https://www.elastic.co/" target="_blank">ELK</a> / <a href="https://grafana.com/" target="_blank">Grafana Loki</a></td><td>日志存储、检索、可视化</td></tr>
-        </table>
-
-        <h3 id="usage-practices">最佳实践</h3>
-        <div class="callout callout-tip">
-          <div class="callout-title">💡 最佳实践</div>
-          <ul>
-            <li><strong>错误去重与聚合</strong>：相同错误合并，避免告警风暴。</li>
-            <li><strong>采样率分层</strong>：错误 100% 采集，性能 10%，全埋点 1% 或按用户采样。</li>
-            <li><strong>关联上下文</strong>：每条错误/事件带上 release 版本、用户 ID、页面路径、设备信息。</li>
-            <li><strong>埋点文档化</strong>：维护埋点字典，定义事件名、属性、触发时机。</li>
-            <li><strong>优先级分级</strong>：P0 错误立即通知，P1 次日汇总，P2 周报回顾。</li>
-            <li><strong>隐私合规</strong>：敏感字段脱敏，符合 GDPR/个人信息保护法要求。</li>
-          </ul>
+        <p><strong>推荐事件 schema</strong>：</p>
+        <div class="code-ref">
+          <div class="code-ref__header"><span class="code-ref__path">推荐埋点事件结构</span></div>
+          <pre><code>{
+  "event_id": "evt_abc123",        // 去重 ID
+  "event": "order_submit_click",   // 事件名，小写下划线分隔
+  "timestamp": 1718601600000,      // 客户端时间戳
+  "session_id": "sess_xyz789",     // 会话 ID
+  "user_id": "u_xxx",              // 登录用户 ID（需合规）
+  "common": {                      // 公共属性
+    "app_version": "2.3.1",
+    "platform": "web",
+    "os": "iOS 17",
+    "browser": "Chrome 125",
+    "screen": "390x844",
+    "referrer": "https://example.com/list"
+  },
+  "properties": {                  // 事件私有属性
+    "product_id": "p_123",
+    "price": 199.0,
+    "currency": "CNY"
+  }
+}</code></pre>
+          <div class="code-ref__notes"><strong>治理要点</strong>：事件名必须全局唯一；属性类型必须固定（禁止同一字段有时是 string 有时是 number）；新增属性必须向后兼容；埋点字典需要版本化管理。</div>
         </div>
 
-        <h3 id="usage-pitfalls">常见陷阱</h3>
+        <h3 id="usage-sampling">采样策略</h3>
+        <p>采样不是随意定一个百分比，而是要在成本、准确性、业务需求之间做权衡。</p>
+
+        <table class="comparison-table">
+          <tr><th>策略</th><th>原理</th><th>优点</th><th>缺点</th><th>适用</th></tr>
+          <tr><td>随机采样</td><td>每个事件独立按概率丢弃</td><td>实现简单</td><td>破坏会话/漏斗一致性</td><td>性能指标、日志</td></tr>
+          <tr><td>会话哈希采样</td><td>按 session_id 哈希取模</td><td>同一会话内数据一致</td><td>无法按事件重要性调整</td><td>用户行为分析</td></tr>
+          <tr><td>动态采样</td><td>根据错误率/流量实时调整</td><td>异常时提高覆盖率</td><td>实现复杂，需避免雪崩</td><td>错误监控</td></tr>
+          <tr><td>服务端采样</td><td>全量上报后服务端过滤</td><td>策略灵活、可回溯</td><td>带宽和客户端开销大</td><td>小规模或关键业务</td></tr>
+        </table>
+
         <div class="callout callout-warning">
-          <div class="callout-title">⚠️ 常见陷阱</div>
-          <ul>
-            <li><strong>告警疲劳</strong>：阈值过低，导致群里告警被忽略。</li>
-            <li><strong>全量采集</strong>：不采样，数据量和成本爆炸。</li>
-            <li><strong>忽视用户隐私</strong>：采集设备 ID、手机号等敏感信息。</li>
-            <li><strong>只看不行动</strong>：埋点数据存在 BI 平台，但没有反馈到产品迭代。</li>
-            <li><strong>前后端口径不一致</strong>：同一个指标，前端埋点和服务端统计对不上。</li>
-          </ul>
+          <div class="callout-title">⚠️ 失败场景：采样破坏漏斗分析</div>
+          <p>如果"进入商品页"和"提交订单"采用独立随机采样，可能出现商品页事件被采样而订单事件未被采样的情况，导致转化率失真。</p>
+          <p><strong>解决方法</strong>：漏斗相关事件使用会话级一致性采样；或在服务端保留完整漏斗路径，仅对非漏斗事件采样。</p>
         </div>
+
+        <p><strong>经验采样率不是铁律</strong>："错误 100%、性能 10%、全埋点 1%"只是起点。实际应该根据：</p>
+        <ul>
+          <li>错误量：小业务错误少，可以 100%；大业务错误多，可以按指纹/hash 采样；</li>
+          <li>性能指标的统计需求：估算 p95/p99 需要的样本量；</li>
+          <li>成本预算：存储、计算、带宽；</li>
+          <li>合规要求：用户隐私法可能限制可采集的数据量。</li>
+        </ul>
       </section>
 
       <section id="principle">
         <h2>核心原理 <span class="level-badge level-badge-l3">L3</span></h2>
 
-        <h3 id="principle-model">可观测性三角</h3>
+        <h3 id="principle-model">可观测性三角与 RUM</h3>
         <pre class="mermaid">
 graph TD
     Logs[日志 Logs] -->|上下文| Traces[链路 Traces]
     Metrics[指标 Metrics] -->|趋势| Logs
     Traces -->|关联| Metrics
-    Logs --> Alert[告警 Alert]
-    Metrics --> Alert
-    Traces --> Alert
-    Alert --> Incident[事件响应]
     Logs --> Tracking[埋点 Tracking]
     Tracking --> Product[产品决策]
+    Metrics --> Alert[告警 Alert]
+    Logs --> Alert
+    Traces --> Alert
+    Alert --> Incident[事件响应]
+    RUM[RUM 真实用户监控] --> Metrics
+    RUM --> Logs
         </pre>
-        <p class="mermaid-caption">图：可观测性三角与告警、埋点的关系</p>
+        <p class="mermaid-caption">图：可观测性三角、埋点、RUM 与告警的关系</p>
 
-        <h3 id="principle-alert">告警链路</h3>
-        <ol class="flow-steps">
-          <li><strong>采集</strong>：SDK 捕获异常、性能指标、业务事件。</li>
-          <li><strong>上报</strong>：通过 <code>sendBeacon</code>、XHR、WebSocket 发送到服务端。</li>
-          <li><strong>清洗</strong>：去重、格式化、补全上下文。</li>
-          <li><strong>聚合</strong>：按错误指纹、时间段、版本维度汇总。</li>
-          <li><strong>告警</strong>：触发阈值时通过 PagerDuty、钉钉、飞书、邮件通知。</li>
-          <li><strong>恢复</strong>：错误率回落后自动关闭告警，并记录处理过程。</li>
+        <p><strong>Logs、Metrics、Traces 的取舍</strong>：</p>
+        <ul>
+          <li><strong>Metrics</strong>：适合聚合趋势和告警，成本低，但丢失个体细节。</li>
+          <li><strong>Logs</strong>：适合保留事件上下文，成本高，检索慢。</li>
+          <li><strong>Traces</strong>：适合跨服务调用链分析，前端 Trace 通过 W3C traceparent 与后端串联。</li>
+        </ul>
+        <p><strong>RUM（Real User Monitoring）</strong>与合成监控的区别：RUM 采集真实用户的设备、网络、地理位置分布，能发现实验室环境测不出的长尾问题；合成监控在固定环境定期执行，适合回归基线对比。</p>
+
+        <h3 id="principle-error">错误采集链路</h3>
+        <pre class="mermaid">
+sequenceDiagram
+    participant U as 用户浏览器
+    participant E as 全局错误监听
+    participant S as Stack 解析
+    participant F as 指纹生成
+    participant D as 本地去重
+    participant R as 上报服务
+    participant A as 聚合/告警
+
+    U->>E: JS 异常 / Promise 拒绝
+    E->>S: 提取 message + stack
+    S->>S: sourcemap 还原
+    S->>F: 函数路径 + 行号 → fingerprint
+    F->>D: 同一 fingerprint 去重
+    D->>R: sendBeacon / fetch keepalive
+    R->>A: 按版本/页面/浏览器聚合
+    A->>A: 触发阈值 → 告警
+        </pre>
+        <p class="mermaid-caption">图：前端错误从发生到告警的完整链路</p>
+
+        <p><strong>sourcemap 还原必须在服务端完成</strong>：不要把 sourcemap 文件暴露到公网（存在源码泄露风险），而是让服务端在收到错误后，用私有存储的 sourcemap 进行还原。还原后的原始文件路径和行号才用于聚合和展示。</p>
+
+        <h3 id="principle-perf">性能指标采集原理</h3>
+        <p><strong>PerformanceObserver 的工作方式</strong>：</p>
+        <ol>
+          <li>浏览器在内部维护一个性能条目缓冲区（buffer）；</li>
+          <li><code>PerformanceObserver</code> 注册后，新产生的条目会推送给回调；</li>
+          <li><code>buffered: true</code> 允许一次性获取缓冲区中已有的条目，解决 SDK 延迟加载导致的数据丢失问题；</li>
+          <li>不同 entryType 的 buffer 大小有限制，超过后旧条目会被丢弃。</li>
         </ol>
 
-        <h3 id="principle-tracking">埋点数据流</h3>
-        <ol class="flow-steps">
-          <li><strong>触发</strong>：用户行为或系统事件产生。</li>
-          <li><strong>采集</strong>：SDK 记录事件名、属性、时间、上下文。</li>
-          <li><strong>缓冲</strong>：本地队列，批量上报，失败重试。</li>
-          <li><strong>传输</strong>：压缩后发送到埋点网关。</li>
-          <li><strong>清洗</strong>：校验、补全、去重、格式转换。</li>
-          <li><strong>存储</strong>：进入数据仓库或实时数仓。</li>
-          <li><strong>分析</strong>：漏斗、留存、路径、归因。</li>
-        </ol>
+        <p><strong>LCP 元素判定</strong>：LCP 候选元素包括 <code>&lt;img&gt;</code>、<code>&lt;video&gt;</code> 的海报、block-level 的文本节点等。当用户与页面发生交互（点击、滚动、按键）时，LCP 停止记录，因为后续内容可能是用户主动触发的，不再代表"初始加载体验"。</p>
+
+        <p><strong>INP 计算</strong>：INP 基于 Event Timing API。对每个交互事件，浏览器测量从事件派发到下一帧绘制的时间，取整个会话中的最大延迟（p98）。这也是为什么长任务阻塞主线程会严重拉高 INP。</p>
+
+        <p><strong>CLS 计算</strong>：<code>layout shift score = impact fraction × distance fraction</code>。只有视口内可见元素的移动才计入，且用户交互后 500ms 内的移动会被排除（<code>hadRecentInput</code>）。</p>
+
+        <h3 id="principle-tracking">埋点数据流与上报机制</h3>
+        <pre class="mermaid">
+sequenceDiagram
+    participant U as 用户行为
+    participant C as 采集层
+    participant Q as 本地队列
+    participant T as 传输层
+    participant G as 网关
+    participant P as 清洗/聚合
+    participant S as 存储
+    participant A as 分析平台
+
+    U->>C: 点击/曝光/路由切换
+    C->>Q: 事件 + 上下文 + 时间戳
+    Q->>Q: 批量 + 压缩 + 去重
+    Q->>T: flush（定时/定量/页面隐藏）
+    T->>T: sendBeacon / fetch keepalive
+    T->>G: HTTP POST
+    G->>P: 校验、补全、采样
+    P->>S: 时序/日志/事件存储
+    S->>A: 漏斗、留存、路径分析
+        </pre>
+        <p class="mermaid-caption">图：埋点从用户行为到分析平台的完整数据流</p>
+
+        <p><strong>上报通道的 trade-off</strong>：</p>
+        <table class="comparison-table">
+          <tr><th>通道</th><th>优点</th><th>限制</th><th>适用场景</th></tr>
+          <tr><td><code>navigator.sendBeacon</code></td><td>页面关闭后仍可发送，不阻塞导航</td><td>64KB 总 quota，无法自定义 headers，无响应</td><td>页面卸载兜底、心跳</td></tr>
+          <tr><td><code>fetch keepalive</code></td><td>可自定义 headers/body，更灵活</td><td>同样有 keepalive quota 限制</td><td>常规批量上报</td></tr>
+          <tr><td>同步 XHR</td><td>页面关闭前可强制发送</td><td>阻塞页面，体验差，已被弃用</td><td>最后 fallback</td></tr>
+          <tr><td>1×1 image beacon</td><td>跨域简单，兼容性好</td><td>GET 长度受限，数据量小</td><td>简单计数、广告追踪</td></tr>
+        </table>
+
+        <div class="callout callout-warning">
+          <div class="callout-title">⚠️ 失败场景：sendBeacon 的 64KB 陷阱</div>
+          <p>Chromium 和 Safari 对 sendBeacon 有总 quota 限制（约 64KB 未发送数据）。如果批量事件过大或失败重试队列积压，<code>sendBeacon</code> 会返回 <code>false</code>，事件静默丢失。</p>
+          <p><strong>调试方法</strong>：监控 <code>sendBeacon</code> 返回值；在实验室环境构造大 payload 测试；使用 <code>fetch keepalive</code> 作为降级。</p>
+        </div>
+
+        <h3 id="principle-sampling">采样算法</h3>
+        <p><strong>客户端随机采样</strong>最简单，但会破坏会话一致性：</p>
+        <div class="code-ref">
+          <div class="code-ref__header"><span class="code-ref__path">随机采样</span></div>
+          <pre><code>function shouldSample(sampleRate) {
+  return Math.random() < sampleRate
+}</code></pre>
+        </div>
+
+        <p><strong>会话哈希采样</strong>保证同一用户要么全采要么全不采：</p>
+        <div class="code-ref">
+          <div class="code-ref__header"><span class="code-ref__path">会话一致性采样</span></div>
+          <pre><code>function hashString(str) {
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i)
+    hash |= 0
+  }
+  return Math.abs(hash)
+}
+
+function shouldSampleBySession(sessionId, sampleRate) {
+  const bucket = hashString(sessionId) % 10000
+  return bucket < sampleRate * 10000
+}</code></pre>
+          <div class="code-ref__notes">使用 session_id 作为哈希输入，确保同一会话内所有事件采样结果一致。采样率调整时，建议重新哈希或用两层采样避免样本突变。</div>
+        </div>
+
+        <p><strong>动态采样</strong>：在错误率升高或流量突增时自动提高采样率。实现时需要注意避免正反馈循环——采样率提高导致上报量增加，进一步触发采样率提高。</p>
       </section>
 
-      <section id="architecture">
-        <h2>架构思考 <span class="level-badge level-badge-l4">L4</span></h2>
+      <section id="engineering">
+        <h2>工程实现与架构 <span class="level-badge level-badge-l4">L4</span></h2>
 
-        <h3>好的架构师如何利用告警与埋点</h3>
-        <div class="decision-box">
-          <div class="decision-box__section decision-box__yes">
-            <h4>✅ 正确姿势</h4>
-            <ul>
-              <li>把监控纳入 Definition of Done，新功能上线必带监控。</li>
-              <li>告警分层： On-Call 处理 P0，团队日会看 P1，周报回顾 P2。</li>
-              <li>埋点驱动产品：A/B 测试、漏斗分析、留存追踪。</li>
-              <li>建立可观测性基线：知道「正常」长什么样，才能识别异常。</li>
-              <li>错误与发布关联：每个错误都知道是哪个版本引入的。</li>
-              <li>成本意识：采样、聚合、冷热分层存储。</li>
-            </ul>
-          </div>
-          <div class="decision-box__section decision-box__no">
-            <h4>❌ 常见反模式</h4>
-            <ul>
-              <li>监控只是运维的事，开发不管。</li>
-              <li>所有错误都告警，导致告警疲劳。</li>
-              <li>埋点无限扩张，采集一切但不分析。</li>
-              <li>线上出问题才加监控，平时不维护。</li>
-              <li>前后端监控割裂，无法串联完整链路。</li>
-            </ul>
-          </div>
+        <h3>SDK 整体架构</h3>
+        <p>一个生产级前端可观测 SDK 应该分层清晰，采集器、处理器、传输器、存储器解耦：</p>
+        <pre class="mermaid">
+graph LR
+    A[采集器 Collectors] --> B[事件队列 Queue]
+    B --> C[处理器 Processor]
+    C --> D[传输器 Transporter]
+    D --> E[网关 Gateway]
+    C -.-> F[存储器 Storage<br/>IndexedDB/localStorage]
+    A -.-> G[配置中心 Config]
+        </pre>
+        <p class="mermaid-caption">图：前端可观测 SDK 的分层架构</p>
+
+        <p><strong>关键配置项</strong>：</p>
+        <ul>
+          <li><code>sampleRate</code>：全局采样率，可按事件类型覆盖；</li>
+          <li><code>endpoint</code>：上报域名，建议独立域名避免被业务 CORS/广告拦截影响；</li>
+          <li><code>batchSize / flushInterval</code>：批量阈值，太小增加请求数，太大数据易丢；</li>
+          <li><code>privacyRules</code>：字段脱敏规则，如手机号、身份证号、密码框输入；</li>
+          <li><code>enableSPA</code>：是否启用软导航测量；</li>
+          <li><code>release</code>：版本号，用于错误与发布的关联。</li>
+        </ul>
+
+        <h3>队列、批量与重试</h3>
+        <p>批量上报的阈值设计是平衡实时性和开销的关键：</p>
+        <ul>
+          <li><strong>数量阈值</strong>：如 10 条事件立即发送，适合高频交互场景；</li>
+          <li><strong>时间阈值</strong>：如 5 秒强制 flush，避免事件在队列中停留过久；</li>
+          <li><strong>页面生命周期阈值</strong>：<code>visibilitychange === 'hidden'</code> 时立即 flush。</li>
+        </ul>
+
+        <p><strong>重试策略</strong>：</p>
+        <ol>
+          <li>首次失败：指数退避重试（1s, 2s, 4s, 8s...）；</li>
+          <li>多次失败：转存到 IndexedDB，下次初始化时恢复；</li>
+          <li>避免重试风暴：设置最大重试次数和全局并发限制。</li>
+        </ol>
+
+        <h3>数据清洗与关联</h3>
+        <p><strong>Trace 上下文关联</strong>：前端 <code>fetch</code> 请求注入 W3C <code>traceparent</code> header，后端接力，实现全链路追踪。需要注意 CORS 预检：</p>
+        <div class="code-ref">
+          <div class="code-ref__header"><span class="code-ref__path">fetch 注入 traceparent</span></div>
+          <pre><code>const traceparent = `00-${traceId}-${spanId}-01`
+fetch('/api/order', {
+  headers: { traceparent }
+})</code></pre>
+          <div class="code-ref__notes">服务端必须在 <code>Access-Control-Allow-Headers</code> 中允许 <code>traceparent</code>，否则跨域请求会被浏览器拦截。这是生产环境最容易遗漏的配置。</div>
+        </div>
+
+        <p><strong>数据对账</strong>：前端埋点与后端日志、业务数据库经常出现口径不一致。常见原因包括：</p>
+        <ul>
+          <li>网络失败导致事件未上报；</li>
+          <li>adblock / 隐私拦截导致 SDK 未加载；</li>
+          <li>预渲染/爬虫触发前端事件但无后端动作；</li>
+          <li>时区/时间戳不一致；</li>
+          <li>前后端对"一次成功"定义不同。</li>
+        </ul>
+        <p><strong>调试方法</strong>：建立端到端对账机制，如"后端订单创建数 ≈ 前端 order_submit 事件数 × (1 - 拦截率) × 上报成功率"。</p>
+
+        <h3>存储与分析层</h3>
+        <table class="comparison-table">
+          <tr><th>数据类型</th><th>存储方案</th><th>查询场景</th><th>成本特点</th></tr>
+          <tr><td>Metrics</td><td>Prometheus / VictoriaMetrics / ClickHouse</td><td>趋势、告警、Dashboard</td><td>低，可降采样</td></tr>
+          <tr><td>Logs / Events</td><td>Elasticsearch / Loki / ClickHouse</td><td>检索、漏斗、归因</td><td>中，需控制字段数量</td></tr>
+          <tr><td>Traces</td><td>Jaeger / Tempo / ClickHouse</td><td>调用链分析</td><td>高，采样尤其重要</td></tr>
+          <tr><td>Replay</td><td>S3 + 元数据索引</td><td>用户会话回放</td><td>高，通常 0.1%-1% 采样</td></tr>
+        </table>
+
+        <h3>成本模型</h3>
+        <p>前端可观测性的成本主要来自：</p>
+        <ol>
+          <li><strong>客户端开销</strong>：SDK 体积、CPU 用于序列化和压缩、额外网络请求；</li>
+          <li><strong>传输成本</strong>：带宽，尤其是全埋点场景；</li>
+          <li><strong>存储成本</strong>：日志/事件通常是最大头；</li>
+          <li><strong>计算成本</strong>：清洗、聚合、告警、分析。</li>
+        </ol>
+
+        <p><strong>估算公式</strong>：</p>
+        <pre><code>日事件量 = DAU × 人均事件数
+日存储量(GB) = 日事件量 × 平均事件大小(B) / 1024 / 1024 / 1024
+月存储量 = 日存储量 × 保留天数</code></pre>
+
+        <p><strong>降本手段</strong>：采样、字段裁剪、客户端预聚合、冷热分层、设置合理的保留策略。</p>
+
+        <h3>隐私与合规</h3>
+        <p>前端埋点最容易触碰隐私红线。必须遵守的原则：</p>
+        <ul>
+          <li>默认不采集 PII（个人可识别信息）；</li>
+          <li>敏感输入框（密码、身份证、银行卡）必须脱敏或排除；</li>
+          <li>提供用户同意管理（consent management），未同意前禁止采集；</li>
+          <li>欧盟 GDPR、中国个人信息保护法要求数据本地化或明确告知用途；</li>
+          <li>采样和匿名化可以降低合规风险。</li>
+        </ul>
+      </section>
+
+      <section id="contrast">
+        <h2>如果我来写 <span class="level-badge level-badge-l4">L4</span></h2>
+
+        <div class="callout callout-insight">
+          <div class="callout-title">🧠 问题 1：错误上报怎么保证不丢？</div>
+          <p><strong>直觉方案</strong>：每次错误发生立即用 <code>fetch</code> 上报。</p>
+          <p><strong>实际方案</strong>：本地队列 + 批量 + <code>sendBeacon</code> 兜底 + IndexedDB 重试。</p>
+          <p><strong>差异分析</strong>：立即 <code>fetch</code> 在页面卸载时会被取消，导致关键错误丢失；批量可以减少请求数；<code>sendBeacon</code> 在页面关闭时仍能尽力发送；IndexedDB 解决离线/网络抖动场景。</p>
+          <p><strong>反向场景</strong>：如果业务对实时性要求极高（如支付失败立即告警），可以关键错误单独通道实时上报，普通错误走批量队列。</p>
         </div>
 
         <div class="callout callout-insight">
-          <div class="callout-title">🧠 如果让你来设计一套前端可观测体系...</div>
-          <p><strong>问题</strong>：如何在有限的成本下，既快速发现线上问题，又能理解用户行为？</p>
-          <p><strong>直觉方案</strong>：接入 Sentry 捕获错误，再用一个埋点 SDK 采集所有点击。</p>
-          <p><strong>更好的做法</strong>：把告警和埋点统一到一个数据平台，错误事件本身也是一种埋点；通过 Trace ID 把前端请求、后端调用、数据库查询串起来；用采样和分级降低成本。</p>
-          <p><strong>差异分析</strong>：分离的体系会导致数据孤岛，排查问题时需要切换多个平台；统一的 Trace + 事件模型能缩短 MTTR（平均修复时间），并让行为数据与系统数据相互印证。</p>
+          <div class="callout-title">🧠 问题 2：性能指标怎么采集？</div>
+          <p><strong>直觉方案</strong>：用 <code>setInterval</code> 轮询 <code>performance.timing</code>。</p>
+          <p><strong>实际方案</strong>：<code>PerformanceObserver</code> + <code>buffered: true</code>。</p>
+          <p><strong>差异分析</strong>：轮询浪费 CPU，且容易错过短暂出现的性能条目；PerformanceObserver 是事件驱动，只在有新条目时触发，且能获取已缓冲的历史条目。<code>buffered: true</code> 解决了 SDK 延迟加载导致的数据丢失。</p>
+          <p><strong>反向场景</strong>：如果需要兼容 IE11，只能回退到轮询 <code>performance.getEntriesByType</code>。</p>
         </div>
 
-        <h3>推荐架构分层</h3>
-        <table>
-          <tr><th>层级</th><th>职责</th><th>技术选择</th></tr>
-          <tr><td>采集层</td><td>SDK、浏览器 API、框架集成</td><td>Sentry SDK, web-vitals, OpenTelemetry JS</td></tr>
-          <tr><td>传输层</td><td>可靠上报、压缩、失败重试</td><td>sendBeacon, Fetch, Kafka</td></tr>
-          <tr><td>处理层</td><td>清洗、聚合、关联、采样</td><td>Flink, Logstash, Cloud Functions</td></tr>
-          <tr><td>存储层</td><td>时序数据、日志、事件</td><td>ClickHouse, Elasticsearch, S3</td></tr>
-          <tr><td>应用层</td><td>告警、Dashboard、分析</td><td>Grafana, Sentry, Amplitude, 自建平台</td></tr>
-        </table>
+        <div class="callout callout-insight">
+          <div class="callout-title">🧠 问题 3：埋点怎么实现？</div>
+          <p><strong>直觉方案</strong>：每个按钮手动加 <code>onClick={() => track('click')}</code>。</p>
+          <p><strong>实际方案</strong>：全局事件代理 + 圈选配置/埋点字典。</p>
+          <p><strong>差异分析</strong>：手动埋点容易遗漏、命名不一致、维护成本高。全局代理配合 <code>data-track-id</code> 等标记，可以在不修改业务代码的情况下新增埋点；代码埋点和可视化埋点结合是大型业务的常见做法。</p>
+          <p><strong>反向场景</strong>：核心交易链路（如提交订单）建议保留代码埋点，因为全局代理可能因 DOM 变化或事件冒泡被阻止而失效。</p>
+        </div>
       </section>
 
       <section id="comparison">
-        <h2>方案对比 <span class="level-badge level-badge-l2">L3</span></h2>
+        <h2>方案对比 <span class="level-badge level-badge-l3">L3</span></h2>
         <table class="comparison-table">
           <tr><th>维度</th><th>Sentry</th><th>OpenTelemetry</th><th>自建 SDK + 平台</th></tr>
           <tr><td>错误监控</td><td>⭐⭐⭐⭐⭐</td><td>⭐⭐⭐</td><td>⭐⭐⭐⭐</td></tr>
           <tr><td>性能监控</td><td>⭐⭐⭐⭐</td><td>⭐⭐⭐⭐⭐</td><td>⭐⭐⭐</td></tr>
           <tr><td>链路追踪</td><td>⭐⭐⭐</td><td>⭐⭐⭐⭐⭐</td><td>⭐⭐⭐</td></tr>
           <tr><td>埋点分析</td><td>⭐⭐</td><td>⭐⭐</td><td>⭐⭐⭐⭐⭐</td></tr>
-          <tr><td>成本</td><td>中高</td><td>中</td><td>可控</td></tr>
+          <tr><td>Session Replay</td><td>⭐⭐⭐⭐⭐</td><td>⭐</td><td>⭐⭐</td></tr>
+          <tr><td>成本</td><td>中高</td><td>中</td><td>可控但人力高</td></tr>
           <tr><td>灵活性</td><td>中</td><td>高</td><td>最高</td></tr>
+          <tr><td>维护成本</td><td>低</td><td>中</td><td>高</td></tr>
         </table>
-        <p><strong>选型建议</strong>：中小团队直接用 Sentry + web-vitals；大型业务用 OpenTelemetry 做标准化采集，自建或对接 Grafana/ClickHouse 做分析；对埋点深度要求高的业务可自建埋点平台。</p>
+
+        <div class="callout callout-tip">
+          <div class="callout-title">💡 选型建议</div>
+          <ul>
+            <li><strong>中小团队</strong>：Sentry + web-vitals，最快落地，错误和性能覆盖 80% 需求。</li>
+            <li><strong>大型业务/多语言栈</strong>：OpenTelemetry 做标准化采集，后端接 Grafana/Tempo/ClickHouse，统一 Trace 和 Metrics。</li>
+            <li><strong>埋点深度要求高</strong>：自建埋点平台，但建议只在核心链路自建，错误性能仍用 Sentry/OpenTelemetry。</li>
+          </ul>
+        </div>
       </section>
 
       <section id="history">
         <h2>历史演进 <span class="level-badge level-badge-l4">L4</span></h2>
         <table>
-          <tr><th>时间</th><th>阶段</th><th>特征</th></tr>
+          <tr><th>时间</th><th>阶段</th><th>关键事件</th></tr>
           <tr><td>2010 前</td><td>日志时代</td><td>服务端日志为主，前端靠用户反馈</td></tr>
-          <tr><td>2010-2015</td><td>错误监控时代</td><td>Airbrake、Sentry 出现，前端开始捕获 JS Error</td></tr>
-          <tr><td>2015-2018</td><td>性能监控时代</td><td>Navigation Timing、Resource Timing、Web Vitals 普及</td></tr>
+          <tr><td>2010-2015</td><td>错误监控时代</td><td>Airbrake、Sentry 出现，前端开始系统捕获 JS Error</td></tr>
+          <tr><td>2015-2018</td><td>性能监控时代</td><td>Navigation Timing、Resource Timing、User Timing 普及</td></tr>
           <tr><td>2018-2021</td><td>埋点与分析时代</td><td>GrowingIO、神策、Amplitude 推动埋点精细化</td></tr>
-          <tr><td>2021 至今</td><td>可观测性统一时代</td><td>OpenTelemetry、Session Replay、RUM + APM 一体化</td></tr>
+          <tr><td>2020-2024</td><td>Web Vitals 时代</td><td>Google 推出 Core Web Vitals；2024 年 3 月 INP 正式替代 FID</td></tr>
+          <tr><td>2021 至今</td><td>可观测性统一时代</td><td>OpenTelemetry 成为跨语言标准；Session Replay、RUM + APM 一体化</td></tr>
         </table>
+
+        <div class="callout callout-insight">
+          <div class="callout-title">🧠 关键决策：为什么 INP 替代 FID？</div>
+          <p>Google 数据显示 93% 的网站已经能轻松通过 FID（<100ms），因为 FID 只测量首次交互的输入延迟，不反映后续交互的卡顿。INP 测量整个会话中所有交互到下一帧绘制的最大延迟，更能代表真实用户体验。这个变更说明性能指标必须从"能过关"转向"真实体验"。</p>
+        </div>
       </section>
 
       <section id="summary">
         <h2>学习要点总结 <span class="level-badge level-badge-l1">L1</span></h2>
-        <ul>
-          <li>前端可观测性 = <strong>日志 + 指标 + 链路</strong>，告警和埋点是两个核心抓手。</li>
-          <li><strong>告警</strong>用于发现系统问题，分为错误、性能、业务、可用性四类。</li>
-          <li><strong>埋点</strong>用于理解用户行为，分为代码埋点、可视化埋点、无埋点、服务端埋点。</li>
-          <li>好的架构师会把监控纳入研发流程，分层告警、合理采样、关联上下文。</li>
-          <li>推荐组合：Sentry / OpenTelemetry 做采集，Grafana / ClickHouse / 自建平台做分析。</li>
-          <li>避免告警疲劳、过度采集、隐私违规、前后端口径不一致。</li>
-        </ul>
+
+        <h3>可复用的工程实践</h3>
+        <ol>
+          <li><strong>错误监控三件套</strong>：<code>error</code> 事件 + <code>unhandledrejection</code> + ErrorBoundary，缺一不可。</li>
+          <li><strong>性能采集用 PerformanceObserver</strong>：避免轮询，记得开启 <code>buffered: true</code>。</li>
+          <li><strong>埋点必须有 eventId 和 sessionId</strong>：前者用于去重，后者用于会话分析和一致性采样。</li>
+          <li><strong>上报通道分层</strong>：正常用 fetch，页面隐藏用 sendBeacon，失败转存 IndexedDB。</li>
+          <li><strong>采样要考虑漏斗一致性</strong>：会话哈希采样比纯随机采样更适合用户行为分析。</li>
+          <li><strong>隐私默认最小化</strong>：PII 不采集，敏感输入脱敏，consent 前置。</li>
+        </ol>
+
+        <h3>可借鉴的架构模式</h3>
+        <ol>
+          <li><strong>采集/处理/传输/存储分层</strong>：每层的故障域独立，便于替换和降级。</li>
+          <li><strong>客户端预聚合</strong>：如 LCP 只需要最终值，不需要上报所有中间候选。</li>
+          <li><strong>Trace 上下文传播</strong>：前端注入 traceparent，串联后端调用链。</li>
+          <li><strong>冷热分层存储</strong>：热数据用于实时告警，冷数据用于离线分析。</li>
+        </ol>
 
         <h3>延伸阅读</h3>
         <ul>
+          <li><a href="https://www.w3.org/TR/beacon/" target="_blank">W3C Beacon API</a></li>
+          <li><a href="https://www.w3.org/TR/performance-timeline/" target="_blank">W3C Performance Timeline</a></li>
+          <li><a href="https://www.w3.org/TR/navigation-timing-2/" target="_blank">W3C Navigation Timing Level 2</a></li>
+          <li><a href="https://web.dev/vitals/" target="_blank">Web Vitals — web.dev</a></li>
+          <li><a href="https://developer.chrome.com/docs/crux" target="_blank">Chrome User Experience Report</a></li>
+          <li><a href="https://opentelemetry.io/docs/languages/js/" target="_blank">OpenTelemetry JavaScript</a></li>
           <li><a href="https://sentry.io/for/frontend/" target="_blank">Sentry for Frontend</a></li>
-          <li><a href="https://opentelemetry.io/docs/instrumentation/js/" target="_blank">OpenTelemetry JavaScript</a></li>
-          <li><a href="https://web.dev/vitals/" target="_blank">Web Vitals</a></li>
-          <li><a href="https://grafana.com/docs/tempo/latest/" target="_blank">Grafana Tempo 分布式追踪</a></li>
-          <li>书籍：SRE: Site Reliability Engineering（Google）</li>
         </ul>
       </section>
 
@@ -1278,6 +651,7 @@ graph TD
       </div>
     </main>
   </div>
+
   <script>
     (function () {
       if (window.innerWidth > 1024) return;
